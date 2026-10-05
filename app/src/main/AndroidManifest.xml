@@ -51,6 +51,10 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".SettingsActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".InCallActivity"
             android:exported="false"
             android:excludeFromRecents="true"
@@ -77,6 +81,10 @@
 
         <receiver
             android:name=".ReminderReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".BirthdayReceiver"
             android:exported="false" />
 
         <receiver
