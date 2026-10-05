@@ -41,6 +41,11 @@ class MainActivity : Activity() {
     private lateinit var contactsInfo: TextView
     private lateinit var recentsInfo: TextView
     private lateinit var contactsChips: Chips
+    private lateinit var chipsHolder: FrameLayout
+    private var contactsSel = "Sabhi"
+    private var birthdays: List<Birthday> = emptyList()
+    private var stamp = 0
+    private var pendingDigit = ""
     private lateinit var recentsChips: Chips
     private lateinit var suggestAdapter: RowAdapter
     private lateinit var contactsAdapter: RowAdapter
@@ -57,13 +62,20 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         initTheme(this)
         applySystemBars(this, BAR)
+        stamp = themeStamp(this)
         buildUi()
         handleIntent(intent)
         ensurePermissions()
+        Birthdays.schedule(this)
     }
 
     override fun onResume() {
         super.onResume()
+        if (themeStamp(this) != stamp) {
+            recreate()
+            return
+        }
+        buildContactChips()
         if (has(Manifest.permission.READ_CONTACTS) || has(Manifest.permission.READ_CALL_LOG)) {
             loadData()
         } else {
@@ -78,6 +90,13 @@ class MainActivity : Activity() {
         if (requestCode == DefaultDialer.REQ) {
             updateBanner()
             if (DefaultDialer.isDefault(this)) toast("Sampark ab default dialer hai")
+        } else if (requestCode == SettingsActivity.REQ_PICK && resultCode == RESULT_OK) {
+            val f = Actions.readPicked(this, data)
+            if (f != null && pendingDigit.isNotEmpty()) {
+                Store.setSpeed(this, pendingDigit, f.number, f.name)
+                toast("Key $pendingDigit: " + (if (f.name.isEmpty()) f.number else f.name))
+            }
+            pendingDigit = ""
         }
     }
 
@@ -116,8 +135,10 @@ class MainActivity : Activity() {
         Thread {
             val cs = if (has(Manifest.permission.READ_CONTACTS)) Data.loadContacts(this) else emptyList()
             val rec = if (has(Manifest.permission.READ_CALL_LOG)) Data.loadRecents(this, cs) else emptyList()
+            val bd = if (has(Manifest.permission.READ_CONTACTS)) Data.loadBirthdays(this) else emptyList()
             runOnUiThread {
                 contacts = cs
+                birthdays = bd
                 recentEntries = rec
                 applyRecentsFilter()
                 applyContactFilter()
@@ -173,6 +194,14 @@ class MainActivity : Activity() {
             tabButtons.add(b)
             nav.addView(b, LinearLayout.LayoutParams(0, WRAP, 1f))
         }
+        val gear = TextView(this)
+        gear.text = "⚙\nSettings"
+        gear.textSize = 12f
+        gear.gravity = Gravity.CENTER
+        gear.setTextColor(GRAY)
+        gear.setPadding(0, dp(8), 0, dp(8))
+        gear.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
+        nav.addView(gear, LinearLayout.LayoutParams(0, WRAP, 1f))
         root.addView(nav, LinearLayout.LayoutParams(MATCH, WRAP))
 
         setContentView(root)
@@ -302,8 +331,35 @@ class MainActivity : Activity() {
                 refreshTyped()
                 true
             }
+        } else if (d.length == 1 && d[0] in '1'..'9') {
+            t.setOnLongClickListener {
+                if (typed.isEmpty()) {
+                    speedDial(d)
+                    true
+                } else {
+                    false
+                }
+            }
         }
         return t
+    }
+
+    private fun speedDial(d: String) {
+        val f = Store.speed(this, d)
+        if (f != null) {
+            toast("Speed dial $d: " + (if (f.name.isEmpty()) f.number else f.name))
+            Actions.call(this, f.number)
+            return
+        }
+        android.app.AlertDialog.Builder(this, dialogTheme())
+            .setTitle("Speed dial $d")
+            .setMessage("Is key par abhi koi contact set nahi hai. Abhi chunna hai?")
+            .setPositiveButton("Contact chuno") { _, _ ->
+                pendingDigit = d
+                Actions.pickContact(this, SettingsActivity.REQ_PICK)
+            }
+            .setNegativeButton("Nahi", null)
+            .show()
     }
 
     private fun buildRecents(): LinearLayout {
@@ -342,10 +398,8 @@ class MainActivity : Activity() {
         val p = LinearLayout(this)
         p.orientation = LinearLayout.VERTICAL
 
-        contactsChips = Chips(this, listOf("Sabhi", "★ Favorites")) {
-            applyContactFilter()
-        }
-        p.addView(contactsChips.view, LinearLayout.LayoutParams(MATCH, WRAP))
+        chipsHolder = FrameLayout(this)
+        p.addView(chipsHolder, LinearLayout.LayoutParams(MATCH, WRAP))
 
         searchBox = EditText(this)
         searchBox.themed("Naam ya number se search karo")
@@ -368,6 +422,42 @@ class MainActivity : Activity() {
         }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
         return p
+    }
+
+    private fun buildContactChips() {
+        val labels = ArrayList<String>()
+        labels.add("Sabhi")
+        labels.add("★ Favorites")
+        labels.add("🎂 Birthdays")
+        for (t in Store.tagList(this)) labels.add("🏷 $t")
+        var idx = labels.indexOf(contactsSel)
+        if (idx < 0) {
+            idx = 0
+            contactsSel = "Sabhi"
+        }
+        contactsChips = Chips(this, labels) { i ->
+            contactsSel = labels[i]
+            applyContactFilter()
+        }
+        contactsChips.select(idx)
+        chipsHolder.removeAllViews()
+        chipsHolder.addView(contactsChips.view, FrameLayout.LayoutParams(MATCH, WRAP))
+    }
+
+    private fun favRow(f: Fav): Row = Row(
+        if (f.name.isEmpty()) f.number else f.name,
+        f.number,
+        f.number,
+        if (f.name.isEmpty()) null else f.name
+    )
+
+    private fun birthdayRows(): List<Row> = birthdays.map {
+        val d = Data.daysUntil(it)
+        val whenTxt = if (d == 0) "Aaj! 🎉" else if (d == 1) "Kal" else "$d din baad"
+        val age = Data.nextAge(it)
+        val sub = it.day.toString() + " " + Data.MONTHS[it.month - 1] + " • " + whenTxt +
+            (if (age > 0) " • $age saal" else "")
+        Row(it.name, sub, it.number, it.name, if (d == 0) GREEN else GRAY)
     }
 
     private fun infoView(): TextView {
@@ -415,17 +505,12 @@ class MainActivity : Activity() {
     private fun applyContactFilter() {
         val q = searchBox.text.toString().trim().lowercase()
         val qd = q.filter { it.isDigit() }
-        val base: List<Row> = if (contactsChips.selected == 1) {
-            Store.favs(this).map {
-                Row(
-                    if (it.name.isEmpty()) it.number else it.name,
-                    it.number,
-                    it.number,
-                    if (it.name.isEmpty()) null else it.name
-                )
-            }
-        } else {
-            contacts.map { Row(it.name, it.number, it.number, it.name) }
+        val sel = contactsSel
+        val base: List<Row> = when {
+            sel == "Sabhi" -> contacts.map { Row(it.name, it.number, it.number, it.name) }
+            sel.startsWith("★") -> Store.favs(this).map { favRow(it) }
+            sel.startsWith("🎂") -> birthdayRows()
+            else -> Store.withTag(this, sel.removePrefix("🏷 ")).map { favRow(it) }
         }
         val list = if (q.isEmpty()) {
             base

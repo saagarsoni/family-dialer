@@ -16,12 +16,16 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 
 const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
+
+val ACCENTS = arrayOf("#1B8A5A", "#1A73E8", "#8E44AD", "#E8710A", "#D93025", "#12857E")
+val ACCENT_NAMES = arrayOf("Green", "Blue", "Purple", "Orange", "Red", "Teal")
 
 var DARK = false
 var GREEN: Int = Color.parseColor("#1B8A5A")
@@ -43,11 +47,26 @@ private val AVATAR_COLORS = intArrayOf(
     Color.parseColor("#B06000")
 )
 
+fun lighten(c: Int, f: Float): Int {
+    val r = (Color.red(c) + (255 - Color.red(c)) * f).toInt()
+    val g = (Color.green(c) + (255 - Color.green(c)) * f).toInt()
+    val b = (Color.blue(c) + (255 - Color.blue(c)) * f).toInt()
+    return Color.rgb(r, g, b)
+}
+
 fun initTheme(ctx: Context) {
-    val mode = ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-    DARK = mode == Configuration.UI_MODE_NIGHT_YES
+    val prefs = ctx.getSharedPreferences("sampark", Context.MODE_PRIVATE)
+    val mode = prefs.getInt("theme_mode", 0)
+    val sys = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+        Configuration.UI_MODE_NIGHT_YES
+    DARK = if (mode == 1) false else if (mode == 2) true else sys
+
+    var idx = prefs.getInt("accent", 0)
+    if (idx < 0 || idx >= ACCENTS.size) idx = 0
+    val base = Color.parseColor(ACCENTS[idx])
+
     if (DARK) {
-        GREEN = Color.parseColor("#2FA36B")
+        GREEN = lighten(base, 0.18f)
         BG = Color.parseColor("#121212")
         BAR = Color.parseColor("#1E1E1E")
         PRESS = Color.parseColor("#2C2C2C")
@@ -55,7 +74,7 @@ fun initTheme(ctx: Context) {
         GRAY = Color.parseColor("#9AA0A6")
         RED = Color.parseColor("#F28B82")
     } else {
-        GREEN = Color.parseColor("#1B8A5A")
+        GREEN = base
         BG = Color.WHITE
         BAR = Color.parseColor("#F3F4F6")
         PRESS = Color.parseColor("#E3E5E8")
@@ -63,6 +82,14 @@ fun initTheme(ctx: Context) {
         GRAY = Color.parseColor("#70757A")
         RED = Color.parseColor("#D93025")
     }
+}
+
+fun themeStamp(ctx: Context): Int =
+    ctx.getSharedPreferences("sampark", Context.MODE_PRIVATE).getInt("theme_stamp", 0)
+
+fun bumpTheme(ctx: Context) {
+    val p = ctx.getSharedPreferences("sampark", Context.MODE_PRIVATE)
+    p.edit().putInt("theme_stamp", p.getInt("theme_stamp", 0) + 1).apply()
 }
 
 fun applySystemBars(act: Activity, navColor: Int) {
@@ -138,14 +165,17 @@ data class Row(
 
 class Chips(private val ctx: Context, labels: List<String>, private val onSelect: (Int) -> Unit) {
 
-    val view = LinearLayout(ctx)
+    val view = HorizontalScrollView(ctx)
+    private val inner = LinearLayout(ctx)
     private val items = ArrayList<TextView>()
     var selected = 0
         private set
 
     init {
-        view.orientation = LinearLayout.HORIZONTAL
-        view.setPadding(ctx.dp(12), ctx.dp(6), ctx.dp(12), ctx.dp(6))
+        view.isHorizontalScrollBarEnabled = false
+        inner.orientation = LinearLayout.HORIZONTAL
+        inner.setPadding(ctx.dp(12), ctx.dp(6), ctx.dp(12), ctx.dp(6))
+        view.addView(inner)
         for (i in labels.indices) {
             val t = TextView(ctx)
             t.text = labels[i]
@@ -158,7 +188,7 @@ class Chips(private val ctx: Context, labels: List<String>, private val onSelect
             }
             val lp = LinearLayout.LayoutParams(WRAP, WRAP)
             lp.rightMargin = ctx.dp(8)
-            view.addView(t, lp)
+            inner.addView(t, lp)
             items.add(t)
         }
         paint()
@@ -167,6 +197,10 @@ class Chips(private val ctx: Context, labels: List<String>, private val onSelect
     fun select(i: Int) {
         selected = i
         paint()
+    }
+
+    fun setLabel(i: Int, text: String) {
+        if (i >= 0 && i < items.size) items[i].text = text
     }
 
     private fun paint() {

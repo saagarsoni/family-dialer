@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -24,10 +25,14 @@ class DetailActivity : Activity() {
     private lateinit var histBox: LinearLayout
     private lateinit var noteInput: EditText
 
+    private var stamp = 0
+    private lateinit var tagBox: LinearLayout
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         initTheme(this)
         applySystemBars(this, BG)
+        stamp = themeStamp(this)
         number = intent.getStringExtra("number") ?: ""
         val n = intent.getStringExtra("name")
         name = if (n.isNullOrEmpty()) Data.lookupName(this, number) else n
@@ -36,6 +41,10 @@ class DetailActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (themeStamp(this) != stamp) {
+            recreate()
+            return
+        }
         refresh()
         Actions.checkPostCall(this)
     }
@@ -169,6 +178,17 @@ class DetailActivity : Activity() {
             col.addView(row2, LinearLayout.LayoutParams(MATCH, WRAP))
         }
 
+        // tags
+        tagBox = LinearLayout(this)
+        tagBox.orientation = LinearLayout.HORIZONTAL
+        if (number.isNotEmpty()) {
+            col.addView(sectionTitle("🏷  Tags"))
+            val hs = HorizontalScrollView(this)
+            hs.isHorizontalScrollBarEnabled = false
+            hs.addView(tagBox)
+            col.addView(hs, LinearLayout.LayoutParams(MATCH, WRAP))
+        }
+
         // notes
         col.addView(sectionTitle("📝  Notes"))
         val inRow = LinearLayout(this)
@@ -218,8 +238,89 @@ class DetailActivity : Activity() {
 
     // ---------- data ----------
 
+    private fun tagChip(text: String, filled: Boolean, onClick: (() -> Unit)?): TextView {
+        val t = TextView(this)
+        t.text = text
+        t.textSize = 13f
+        t.gravity = Gravity.CENTER
+        t.setPadding(dp(14), dp(7), dp(14), dp(7))
+        if (filled) {
+            t.background = roundBg(this, GREEN, 18)
+            t.setTextColor(Color.WHITE)
+        } else {
+            t.background = roundBg(this, PRESS, 18)
+            t.setTextColor(INK)
+        }
+        if (onClick != null) t.setOnClickListener { onClick() }
+        return t
+    }
+
+    private fun refreshTags() {
+        tagBox.removeAllViews()
+        if (number.isEmpty()) return
+        val mine = Store.tagsOf(this, number)
+        for (t in mine) {
+            val lp = LinearLayout.LayoutParams(WRAP, WRAP)
+            lp.rightMargin = dp(8)
+            tagBox.addView(tagChip(t, true) { editTags() }, lp)
+        }
+        tagBox.addView(
+            tagChip(if (mine.isEmpty()) "＋ Tag lagao" else "✎ Badlo", false) { editTags() },
+            LinearLayout.LayoutParams(WRAP, WRAP)
+        )
+    }
+
+    private fun editTags() {
+        val all = Store.tagList(this)
+        val mine = Store.tagsOf(this, number)
+        val checked = BooleanArray(all.size) { mine.contains(all[it]) }
+
+        fun selected(): List<String> {
+            val out = ArrayList<String>()
+            for (i in all.indices) if (checked[i]) out.add(all[i])
+            return out
+        }
+
+        AlertDialog.Builder(this, dialogTheme())
+            .setTitle("Tags")
+            .setMultiChoiceItems(all.toTypedArray(), checked) { _, i, c -> checked[i] = c }
+            .setPositiveButton("Save") { _, _ ->
+                Store.setTags(this, number, name ?: "", selected())
+                refreshTags()
+            }
+            .setNeutralButton("Naya tag") { _, _ -> newTag(selected()) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun newTag(keep: List<String>) {
+        val et = EditText(this)
+        et.themed("Tag ka naam")
+        et.setSingleLine()
+        val box = LinearLayout(this)
+        box.setPadding(dp(20), dp(8), dp(20), 0)
+        box.addView(et, LinearLayout.LayoutParams(MATCH, WRAP))
+        AlertDialog.Builder(this, dialogTheme())
+            .setTitle("Naya tag")
+            .setView(box)
+            .setPositiveButton("Add") { _, _ ->
+                val t = et.text.toString().trim()
+                if (t.isNotEmpty()) {
+                    Store.addTag(this, t)
+                    val l = keep.toMutableList()
+                    val real = Store.tagList(this).firstOrNull { it.equals(t, true) } ?: t
+                    if (!l.contains(real)) l.add(real)
+                    Store.setTags(this, number, name ?: "", l)
+                }
+                refreshTags()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun refresh() {
         updateStar()
+        refreshTags()
         refreshNotes()
         refreshReminders()
         Thread {

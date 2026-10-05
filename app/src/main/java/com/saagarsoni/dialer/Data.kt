@@ -4,8 +4,10 @@ import android.content.Context
 import android.net.Uri
 import android.provider.CallLog
 import android.provider.ContactsContract
+import android.provider.ContactsContract.CommonDataKinds.Event
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -15,6 +17,14 @@ data class Contact(
     val digits: String,
     val t9: String,
     val words: List<String>
+)
+
+data class Birthday(
+    val name: String,
+    val number: String,
+    val month: Int,
+    val day: Int,
+    val year: Int
 )
 
 data class CallEntry(
@@ -200,6 +210,97 @@ object Data {
             }
         }
         return out
+    }
+
+    val MONTHS = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+    private fun midnight(): Calendar {
+        val c = Calendar.getInstance()
+        c.set(Calendar.HOUR_OF_DAY, 0)
+        c.set(Calendar.MINUTE, 0)
+        c.set(Calendar.SECOND, 0)
+        c.set(Calendar.MILLISECOND, 0)
+        return c
+    }
+
+    private fun nextDate(b: Birthday): Calendar {
+        val today = midnight()
+        val t = Calendar.getInstance()
+        t.set(today.get(Calendar.YEAR), b.month - 1, b.day, 0, 0, 0)
+        t.set(Calendar.MILLISECOND, 0)
+        if (t.before(today)) t.add(Calendar.YEAR, 1)
+        return t
+    }
+
+    fun daysUntil(b: Birthday): Int {
+        val t = nextDate(b)
+        val today = midnight()
+        return ((t.timeInMillis - today.timeInMillis + 3600000L) / 86400000L).toInt()
+    }
+
+    fun nextAge(b: Birthday): Int {
+        if (b.year <= 1900) return 0
+        return nextDate(b).get(Calendar.YEAR) - b.year
+    }
+
+    fun loadBirthdays(ctx: Context): List<Birthday> {
+        val numbers = HashMap<Long, String>()
+        try {
+            ctx.contentResolver.query(
+                Phone.CONTENT_URI,
+                arrayOf(Phone.CONTACT_ID, Phone.NUMBER),
+                null,
+                null,
+                null
+            )?.use {
+                while (it.moveToNext()) {
+                    val id = it.getLong(0)
+                    val n = it.getString(1) ?: continue
+                    if (!numbers.containsKey(id)) numbers[id] = n
+                }
+            }
+        } catch (e: Exception) {
+        }
+
+        val out = ArrayList<Birthday>()
+        val seen = HashSet<String>()
+        try {
+            val sel = ContactsContract.Data.MIMETYPE + "=? AND " + Event.TYPE + "=" + Event.TYPE_BIRTHDAY
+            ctx.contentResolver.query(
+                ContactsContract.Data.CONTENT_URI,
+                arrayOf(
+                    ContactsContract.Data.CONTACT_ID,
+                    ContactsContract.Data.DISPLAY_NAME,
+                    Event.START_DATE
+                ),
+                sel,
+                arrayOf(Event.CONTENT_ITEM_TYPE),
+                null
+            )?.use {
+                while (it.moveToNext()) {
+                    val id = it.getLong(0)
+                    val name = it.getString(1) ?: continue
+                    val raw = it.getString(2) ?: continue
+                    val parts = raw.trim().split("-").filter { p -> p.isNotEmpty() }
+                    var y = 0
+                    var m = 0
+                    var d = 0
+                    if (parts.size >= 3) {
+                        y = parts[0].toIntOrNull() ?: 0
+                        m = parts[1].toIntOrNull() ?: 0
+                        d = parts[2].take(2).toIntOrNull() ?: 0
+                    } else if (parts.size == 2) {
+                        m = parts[0].toIntOrNull() ?: 0
+                        d = parts[1].take(2).toIntOrNull() ?: 0
+                    }
+                    if (m < 1 || m > 12 || d < 1 || d > 31) continue
+                    if (!seen.add(name + "|" + m + "|" + d)) continue
+                    out.add(Birthday(name, numbers[id] ?: "", m, d, y))
+                }
+            }
+        } catch (e: Exception) {
+        }
+        return out.sortedBy { daysUntil(it) }
     }
 
     fun typeLabel(type: Int): String = when (type) {

@@ -76,6 +76,41 @@ object Actions {
         safeStart(act, i)
     }
 
+    fun pickContact(act: Activity, req: Int) {
+        try {
+            act.startActivityForResult(
+                Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI),
+                req
+            )
+        } catch (e: Exception) {
+            act.toast("Contact picker nahi khula")
+        }
+    }
+
+    fun readPicked(act: Activity, data: Intent?): Fav? {
+        val uri = data?.data ?: return null
+        var out: Fav? = null
+        try {
+            act.contentResolver.query(
+                uri,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.NUMBER,
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+                ),
+                null,
+                null,
+                null
+            )?.use {
+                if (it.moveToFirst()) {
+                    val n = it.getString(0)
+                    if (n != null) out = Fav(n, it.getString(1) ?: "")
+                }
+            }
+        } catch (e: Exception) {
+        }
+        return out
+    }
+
     fun openDetail(ctx: Context, number: String, name: String?) {
         val i = Intent(ctx, DetailActivity::class.java)
         i.putExtra("number", number)
@@ -182,12 +217,13 @@ object Actions {
             "1 ghante baad",
             "Aaj shaam 6 baje",
             "Kal subah 10 baje",
+            "Kal shaam 5 baje",
             "Date aur time chuno"
         )
         AlertDialog.Builder(act, dialogTheme())
             .setTitle("Kab yaad dilau?")
             .setItems(labels) { _, i ->
-                if (i == 4) {
+                if (i == 5) {
                     pickCustom(act, number, name, msg, onDone)
                 } else {
                     val cal = Calendar.getInstance()
@@ -202,9 +238,15 @@ object Actions {
                                 cal.add(Calendar.DAY_OF_YEAR, 1)
                             }
                         }
-                        else -> {
+                        3 -> {
                             cal.add(Calendar.DAY_OF_YEAR, 1)
                             cal.set(Calendar.HOUR_OF_DAY, 10)
+                            cal.set(Calendar.MINUTE, 0)
+                            cal.set(Calendar.SECOND, 0)
+                        }
+                        else -> {
+                            cal.add(Calendar.DAY_OF_YEAR, 1)
+                            cal.set(Calendar.HOUR_OF_DAY, 17)
                             cal.set(Calendar.MINUTE, 0)
                             cal.set(Calendar.SECOND, 0)
                         }
