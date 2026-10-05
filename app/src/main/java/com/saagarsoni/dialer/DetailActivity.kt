@@ -1,0 +1,334 @@
+package com.saagarsoni.dialer
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.graphics.Color
+import android.graphics.Typeface
+import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+
+class DetailActivity : Activity() {
+
+    private var number = ""
+    private var name: String? = null
+
+    private lateinit var starView: TextView
+    private lateinit var notesBox: LinearLayout
+    private lateinit var remTitle: TextView
+    private lateinit var remBox: LinearLayout
+    private lateinit var histBox: LinearLayout
+    private lateinit var noteInput: EditText
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        initTheme(this)
+        applySystemBars(this, BG)
+        number = intent.getStringExtra("number") ?: ""
+        val n = intent.getStringExtra("name")
+        name = if (n.isNullOrEmpty()) Data.lookupName(this, number) else n
+        buildUi()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refresh()
+        Actions.checkPostCall(this)
+    }
+
+    // ---------- UI building ----------
+
+    private fun iconBtn(text: String, onClick: () -> Unit): TextView {
+        val t = TextView(this)
+        t.text = text
+        t.textSize = 22f
+        t.setTextColor(GRAY)
+        t.gravity = Gravity.CENTER
+        t.setOnClickListener { onClick() }
+        return t
+    }
+
+    private fun actionBtn(emoji: String, label: String, onClick: () -> Unit): LinearLayout {
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.gravity = Gravity.CENTER
+        box.setPadding(0, dp(10), 0, dp(10))
+        box.isClickable = true
+        box.setOnClickListener { onClick() }
+
+        val e = TextView(this)
+        e.text = emoji
+        e.textSize = 24f
+        e.gravity = Gravity.CENTER
+        box.addView(e)
+
+        val l = TextView(this)
+        l.text = label
+        l.textSize = 12f
+        l.setTextColor(INK)
+        l.gravity = Gravity.CENTER
+        box.addView(l)
+        return box
+    }
+
+    private fun sectionTitle(text: String): TextView {
+        val t = TextView(this)
+        t.text = text
+        t.textSize = 15f
+        t.typeface = Typeface.DEFAULT_BOLD
+        t.setTextColor(GREEN)
+        t.setPadding(0, dp(20), 0, dp(6))
+        return t
+    }
+
+    private fun hint(text: String): TextView {
+        val t = TextView(this)
+        t.text = text
+        t.textSize = 13f
+        t.setTextColor(GRAY)
+        t.setPadding(0, dp(4), 0, dp(4))
+        return t
+    }
+
+    private fun buildUi() {
+        val root = LinearLayout(this)
+        root.orientation = LinearLayout.VERTICAL
+        root.setBackgroundColor(BG)
+
+        val top = LinearLayout(this)
+        top.orientation = LinearLayout.HORIZONTAL
+        top.gravity = Gravity.CENTER_VERTICAL
+        top.addView(iconBtn("←") { finish() }, LinearLayout.LayoutParams(dp(52), dp(52)))
+        top.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        starView = iconBtn("☆") { toggleFav() }
+        top.addView(starView, LinearLayout.LayoutParams(dp(52), dp(52)))
+        root.addView(top, LinearLayout.LayoutParams(MATCH, WRAP))
+
+        val scroll = ScrollView(this)
+        scroll.setBackgroundColor(BG)
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.setPadding(dp(20), 0, dp(20), dp(24))
+        scroll.addView(col, LinearLayout.LayoutParams(MATCH, WRAP))
+        root.addView(scroll, LinearLayout.LayoutParams(MATCH, 0, 1f))
+
+        val shownName = name ?: (if (number.isEmpty()) "Private number" else number)
+
+        val av = TextView(this)
+        av.gravity = Gravity.CENTER
+        av.setTextColor(Color.WHITE)
+        av.textSize = 34f
+        av.typeface = Typeface.DEFAULT_BOLD
+        av.background = circleBg(avatarColor(shownName))
+        av.text = (name?.trim()?.firstOrNull() ?: '#').uppercaseChar().toString()
+        val alp = LinearLayout.LayoutParams(dp(88), dp(88))
+        alp.gravity = Gravity.CENTER_HORIZONTAL
+        col.addView(av, alp)
+
+        val nameView = TextView(this)
+        nameView.text = shownName
+        nameView.textSize = 22f
+        nameView.typeface = Typeface.DEFAULT_BOLD
+        nameView.setTextColor(INK)
+        nameView.gravity = Gravity.CENTER
+        nameView.setPadding(0, dp(12), 0, 0)
+        col.addView(nameView, LinearLayout.LayoutParams(MATCH, WRAP))
+
+        if (name != null) {
+            val numView = TextView(this)
+            numView.text = number
+            numView.textSize = 15f
+            numView.setTextColor(GRAY)
+            numView.gravity = Gravity.CENTER
+            col.addView(numView, LinearLayout.LayoutParams(MATCH, WRAP))
+        }
+
+        if (number.isNotEmpty()) {
+            val row1 = LinearLayout(this)
+            row1.orientation = LinearLayout.HORIZONTAL
+            row1.addView(actionBtn("📞", "Call") { Actions.call(this, number) }, LinearLayout.LayoutParams(0, WRAP, 1f))
+            row1.addView(actionBtn("💬", "SMS") { Actions.sms(this, number) }, LinearLayout.LayoutParams(0, WRAP, 1f))
+            row1.addView(actionBtn("🟢", "WhatsApp") { Actions.whatsapp(this, number) }, LinearLayout.LayoutParams(0, WRAP, 1f))
+            val rlp = LinearLayout.LayoutParams(MATCH, WRAP)
+            rlp.topMargin = dp(16)
+            col.addView(row1, rlp)
+
+            val row2 = LinearLayout(this)
+            row2.orientation = LinearLayout.HORIZONTAL
+            row2.addView(actionBtn("⏰", "Reminder") { Actions.askReminder(this, number, name, "") }, LinearLayout.LayoutParams(0, WRAP, 1f))
+            row2.addView(actionBtn("📋", "Copy") { Actions.copy(this, number) }, LinearLayout.LayoutParams(0, WRAP, 1f))
+            if (name == null) {
+                row2.addView(actionBtn("➕", "Save") { Actions.saveContact(this, number) }, LinearLayout.LayoutParams(0, WRAP, 1f))
+            } else {
+                row2.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+            }
+            col.addView(row2, LinearLayout.LayoutParams(MATCH, WRAP))
+        }
+
+        // notes
+        col.addView(sectionTitle("📝  Notes"))
+        val inRow = LinearLayout(this)
+        inRow.orientation = LinearLayout.HORIZONTAL
+        inRow.gravity = Gravity.CENTER_VERTICAL
+        noteInput = EditText(this)
+        noteInput.themed("Note likho...")
+        inRow.addView(noteInput, LinearLayout.LayoutParams(0, WRAP, 1f))
+        val save = TextView(this)
+        save.text = "Save"
+        save.setTextColor(Color.WHITE)
+        save.gravity = Gravity.CENTER
+        save.setPadding(dp(16), dp(8), dp(16), dp(8))
+        save.background = roundBg(this, GREEN, 8)
+        save.setOnClickListener {
+            val t = noteInput.text.toString().trim()
+            if (t.isNotEmpty()) {
+                Store.addNote(this, number, t)
+                noteInput.setText("")
+                refreshNotes()
+            }
+        }
+        val slp = LinearLayout.LayoutParams(WRAP, WRAP)
+        slp.leftMargin = dp(8)
+        inRow.addView(save, slp)
+        col.addView(inRow, LinearLayout.LayoutParams(MATCH, WRAP))
+
+        notesBox = LinearLayout(this)
+        notesBox.orientation = LinearLayout.VERTICAL
+        col.addView(notesBox, LinearLayout.LayoutParams(MATCH, WRAP))
+
+        // reminders
+        remTitle = sectionTitle("⏰  Reminders")
+        col.addView(remTitle)
+        remBox = LinearLayout(this)
+        remBox.orientation = LinearLayout.VERTICAL
+        col.addView(remBox, LinearLayout.LayoutParams(MATCH, WRAP))
+
+        // history
+        col.addView(sectionTitle("📞  Call history"))
+        histBox = LinearLayout(this)
+        histBox.orientation = LinearLayout.VERTICAL
+        col.addView(histBox, LinearLayout.LayoutParams(MATCH, WRAP))
+
+        setContentView(root)
+    }
+
+    // ---------- data ----------
+
+    private fun refresh() {
+        updateStar()
+        refreshNotes()
+        refreshReminders()
+        Thread {
+            val h = Data.historyFor(this, number, 30)
+            runOnUiThread { fillHistory(h) }
+        }.start()
+    }
+
+    private fun updateStar() {
+        val fav = Store.isFav(this, number)
+        starView.text = if (fav) "★" else "☆"
+        starView.setTextColor(if (fav) GOLD else GRAY)
+    }
+
+    private fun toggleFav() {
+        if (number.isEmpty()) return
+        val now = Store.toggleFav(this, number, name ?: "")
+        updateStar()
+        toast(if (now) "Favorites mein add ho gaya" else "Favorites se hata diya")
+    }
+
+    private fun confirm(msg: String, onYes: () -> Unit) {
+        AlertDialog.Builder(this, dialogTheme())
+            .setMessage(msg)
+            .setPositiveButton("Haan") { _, _ -> onYes() }
+            .setNegativeButton("Nahi", null)
+            .show()
+    }
+
+    private fun itemRow(line1: String, line2: String, onDelete: () -> Unit): LinearLayout {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        row.setPadding(0, dp(4), 0, dp(4))
+
+        val colv = LinearLayout(this)
+        colv.orientation = LinearLayout.VERTICAL
+        val t = TextView(this)
+        t.text = line1
+        t.textSize = 15f
+        t.setTextColor(INK)
+        val d = TextView(this)
+        d.text = line2
+        d.textSize = 12f
+        d.setTextColor(GRAY)
+        colv.addView(t)
+        colv.addView(d)
+        row.addView(colv, LinearLayout.LayoutParams(0, WRAP, 1f))
+
+        val x = iconBtn("✕") { onDelete() }
+        x.textSize = 16f
+        row.addView(x, LinearLayout.LayoutParams(dp(40), dp(40)))
+        return row
+    }
+
+    private fun refreshNotes() {
+        notesBox.removeAllViews()
+        val list = Store.notes(this, number)
+        if (list.isEmpty()) {
+            notesBox.addView(hint("Abhi koi note nahi"))
+            return
+        }
+        for (n in list) {
+            notesBox.addView(
+                itemRow(n.text, Data.fmtTime(n.ts)) {
+                    confirm("Ye note delete karu?") {
+                        Store.deleteNote(this, number, n.ts)
+                        refreshNotes()
+                    }
+                },
+                LinearLayout.LayoutParams(MATCH, WRAP)
+            )
+        }
+    }
+
+    private fun refreshReminders() {
+        remBox.removeAllViews()
+        val key = Data.key10(number)
+        val list = Store.reminders(this).filter { Data.key10(it.number) == key }
+        remTitle.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+        for (r in list) {
+            remBox.addView(
+                itemRow(r.msg, Data.fmtTime(r.at)) {
+                    confirm("Ye reminder hata du?") {
+                        Remind.delete(this, r)
+                        refreshReminders()
+                    }
+                },
+                LinearLayout.LayoutParams(MATCH, WRAP)
+            )
+        }
+    }
+
+    private fun fillHistory(list: List<CallEntry>) {
+        histBox.removeAllViews()
+        if (list.isEmpty()) {
+            histBox.addView(hint("Koi call history nahi"))
+            return
+        }
+        for (e in list) {
+            val dur = Data.fmtDur(e.duration)
+            var text = Data.typeLabel(e.type) + " • " + Data.fmtTime(e.date)
+            if (dur.isNotEmpty() && e.type != 3) text += " • $dur"
+            val t = TextView(this)
+            t.text = text
+            t.textSize = 14f
+            t.setTextColor(if (e.type == 3 || e.type == 5) RED else INK)
+            t.setPadding(0, dp(6), 0, dp(6))
+            histBox.addView(t, LinearLayout.LayoutParams(MATCH, WRAP))
+        }
+    }
+}

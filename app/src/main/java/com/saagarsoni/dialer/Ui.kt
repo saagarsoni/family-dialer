@@ -1,24 +1,37 @@
 package com.saagarsoni.dialer
 
+import android.app.Activity
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.StateListDrawable
+import android.text.Editable
 import android.text.TextUtils
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 
 const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
 
-val GREEN: Int = Color.parseColor("#1B8A5A")
-val INK: Int = Color.parseColor("#202124")
-val GRAY: Int = Color.parseColor("#70757A")
-val RED: Int = Color.parseColor("#D93025")
+var DARK = false
+var GREEN: Int = Color.parseColor("#1B8A5A")
+var BG: Int = Color.WHITE
+var BAR: Int = Color.parseColor("#F3F4F6")
+var PRESS: Int = Color.parseColor("#E3E5E8")
+var INK: Int = Color.parseColor("#202124")
+var GRAY: Int = Color.parseColor("#70757A")
+var RED: Int = Color.parseColor("#D93025")
+val GOLD: Int = Color.parseColor("#F9AB00")
 
 private val AVATAR_COLORS = intArrayOf(
     Color.parseColor("#1B8A5A"),
@@ -30,7 +43,90 @@ private val AVATAR_COLORS = intArrayOf(
     Color.parseColor("#B06000")
 )
 
+fun initTheme(ctx: Context) {
+    val mode = ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+    DARK = mode == Configuration.UI_MODE_NIGHT_YES
+    if (DARK) {
+        GREEN = Color.parseColor("#2FA36B")
+        BG = Color.parseColor("#121212")
+        BAR = Color.parseColor("#1E1E1E")
+        PRESS = Color.parseColor("#2C2C2C")
+        INK = Color.parseColor("#ECECEC")
+        GRAY = Color.parseColor("#9AA0A6")
+        RED = Color.parseColor("#F28B82")
+    } else {
+        GREEN = Color.parseColor("#1B8A5A")
+        BG = Color.WHITE
+        BAR = Color.parseColor("#F3F4F6")
+        PRESS = Color.parseColor("#E3E5E8")
+        INK = Color.parseColor("#202124")
+        GRAY = Color.parseColor("#70757A")
+        RED = Color.parseColor("#D93025")
+    }
+}
+
+fun applySystemBars(act: Activity, navColor: Int) {
+    act.window.setBackgroundDrawable(ColorDrawable(BG))
+    act.window.statusBarColor = BG
+    act.window.navigationBarColor = navColor
+    var flags = 0
+    if (!DARK) {
+        flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+    }
+    act.window.decorView.systemUiVisibility = flags
+}
+
+fun dialogTheme(): Int =
+    if (DARK) android.R.style.Theme_Material_Dialog_Alert
+    else android.R.style.Theme_Material_Light_Dialog_Alert
+
 fun Context.dp(v: Int): Int = (v * resources.displayMetrics.density + 0.5f).toInt()
+
+fun Context.toast(msg: String) {
+    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+}
+
+fun avatarColor(key: String): Int =
+    AVATAR_COLORS[(key.hashCode() and 0x7fffffff) % AVATAR_COLORS.size]
+
+fun roundBg(ctx: Context, color: Int, radiusDp: Int): GradientDrawable {
+    val g = GradientDrawable()
+    g.cornerRadius = ctx.dp(radiusDp).toFloat()
+    g.setColor(color)
+    return g
+}
+
+fun circleBg(color: Int): GradientDrawable {
+    val g = GradientDrawable()
+    g.shape = GradientDrawable.OVAL
+    g.setColor(color)
+    return g
+}
+
+fun pressBg(): StateListDrawable {
+    val sl = StateListDrawable()
+    sl.addState(intArrayOf(android.R.attr.state_pressed), circleBg(PRESS))
+    sl.addState(intArrayOf(), ColorDrawable(Color.TRANSPARENT))
+    return sl
+}
+
+fun EditText.themed(hintText: String) {
+    hint = hintText
+    setTextColor(INK)
+    setHintTextColor(GRAY)
+}
+
+fun EditText.onChange(cb: () -> Unit) {
+    addTextChangedListener(object : TextWatcher {
+        override fun afterTextChanged(s: Editable?) {
+            cb()
+        }
+
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+    })
+}
 
 data class Row(
     val title: String,
@@ -39,6 +135,52 @@ data class Row(
     val name: String?,
     val subColor: Int = GRAY
 )
+
+class Chips(private val ctx: Context, labels: List<String>, private val onSelect: (Int) -> Unit) {
+
+    val view = LinearLayout(ctx)
+    private val items = ArrayList<TextView>()
+    var selected = 0
+        private set
+
+    init {
+        view.orientation = LinearLayout.HORIZONTAL
+        view.setPadding(ctx.dp(12), ctx.dp(6), ctx.dp(12), ctx.dp(6))
+        for (i in labels.indices) {
+            val t = TextView(ctx)
+            t.text = labels[i]
+            t.textSize = 13f
+            t.gravity = Gravity.CENTER
+            t.setPadding(ctx.dp(14), ctx.dp(7), ctx.dp(14), ctx.dp(7))
+            t.setOnClickListener {
+                select(i)
+                onSelect(i)
+            }
+            val lp = LinearLayout.LayoutParams(WRAP, WRAP)
+            lp.rightMargin = ctx.dp(8)
+            view.addView(t, lp)
+            items.add(t)
+        }
+        paint()
+    }
+
+    fun select(i: Int) {
+        selected = i
+        paint()
+    }
+
+    private fun paint() {
+        for (i in items.indices) {
+            if (i == selected) {
+                items[i].background = roundBg(ctx, GREEN, 18)
+                items[i].setTextColor(Color.WHITE)
+            } else {
+                items[i].background = roundBg(ctx, PRESS, 18)
+                items[i].setTextColor(INK)
+            }
+        }
+    }
+}
 
 class RowAdapter(private val ctx: Context, private val onCall: (Row) -> Unit) : BaseAdapter() {
 
@@ -111,10 +253,7 @@ class RowAdapter(private val ctx: Context, private val onCall: (Row) -> Unit) : 
         h.sub.text = row.sub
         h.sub.setTextColor(row.subColor)
 
-        val bg = GradientDrawable()
-        bg.shape = GradientDrawable.OVAL
-        bg.setColor(AVATAR_COLORS[(row.title.hashCode() and 0x7fffffff) % AVATAR_COLORS.size])
-        h.avatar.background = bg
+        h.avatar.background = circleBg(avatarColor(row.title))
         val ch = row.name?.trim()?.firstOrNull() ?: '#'
         h.avatar.text = ch.uppercaseChar().toString()
 

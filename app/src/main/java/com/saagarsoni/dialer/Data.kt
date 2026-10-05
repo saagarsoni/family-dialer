@@ -1,7 +1,9 @@
 package com.saagarsoni.dialer
 
 import android.content.Context
+import android.net.Uri
 import android.provider.CallLog
+import android.provider.ContactsContract
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -144,6 +146,60 @@ object Data {
         }
         scored.sortBy { it.first }
         return scored.take(40).map { it.second }
+    }
+
+    fun lookupName(ctx: Context, number: String): String? {
+        if (number.isEmpty()) return null
+        return try {
+            val uri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                Uri.encode(number)
+            )
+            ctx.contentResolver.query(
+                uri,
+                arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use {
+                if (it.moveToFirst()) it.getString(0) else null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun historyFor(ctx: Context, number: String, limit: Int): List<CallEntry> {
+        val key = key10(number)
+        if (key.isEmpty()) return emptyList()
+        val c = try {
+            ctx.contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                arrayOf(
+                    CallLog.Calls.NUMBER,
+                    CallLog.Calls.TYPE,
+                    CallLog.Calls.DATE,
+                    CallLog.Calls.DURATION
+                ),
+                null,
+                null,
+                CallLog.Calls.DATE + " DESC"
+            )
+        } catch (e: Exception) {
+            null
+        }
+        if (c == null) return emptyList()
+        val out = ArrayList<CallEntry>()
+        c.use {
+            var scanned = 0
+            while (out.size < limit && scanned < 3000 && it.moveToNext()) {
+                scanned++
+                val n = it.getString(0) ?: ""
+                if (key10(n) != key) continue
+                out.add(CallEntry(n, null, it.getInt(1), it.getLong(2), it.getLong(3), 1))
+            }
+        }
+        return out
     }
 
     fun typeLabel(type: Int): String = when (type) {

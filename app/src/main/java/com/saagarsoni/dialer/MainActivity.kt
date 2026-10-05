@@ -2,25 +2,16 @@ package com.saagarsoni.dialer
 
 import android.Manifest
 import android.app.Activity
-import android.app.AlertDialog
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.StateListDrawable
 import android.net.Uri
 import android.os.Bundle
-import android.provider.ContactsContract
 import android.provider.Settings
-import android.text.Editable
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.TextUtils
-import android.text.TextWatcher
 import android.text.style.RelativeSizeSpan
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
@@ -31,14 +22,12 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
-import android.widget.Toast
 
 class MainActivity : Activity() {
 
     private var contacts: List<Contact> = emptyList()
     private var recentEntries: List<CallEntry> = emptyList()
     private var typed = StringBuilder()
-    private var pendingCall: String? = null
 
     private lateinit var dialerPane: LinearLayout
     private lateinit var recentsPane: LinearLayout
@@ -46,8 +35,11 @@ class MainActivity : Activity() {
     private lateinit var numberView: TextView
     private lateinit var backView: TextView
     private lateinit var searchBox: EditText
+    private lateinit var recentsSearch: EditText
     private lateinit var contactsInfo: TextView
     private lateinit var recentsInfo: TextView
+    private lateinit var contactsChips: Chips
+    private lateinit var recentsChips: Chips
     private lateinit var suggestAdapter: RowAdapter
     private lateinit var contactsAdapter: RowAdapter
     private lateinit var recentsAdapter: RowAdapter
@@ -61,8 +53,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.WHITE
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        initTheme(this)
+        applySystemBars(this, BAR)
         buildUi()
         handleIntent(intent)
         ensurePermissions()
@@ -72,7 +64,10 @@ class MainActivity : Activity() {
         super.onResume()
         if (has(Manifest.permission.READ_CONTACTS) || has(Manifest.permission.READ_CALL_LOG)) {
             loadData()
+        } else {
+            applyContactFilter()
         }
+        Actions.checkPostCall(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -98,11 +93,6 @@ class MainActivity : Activity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         loadData()
-        val p = pendingCall
-        if (p != null) {
-            pendingCall = null
-            if (has(Manifest.permission.CALL_PHONE)) placeCall(p)
-        }
     }
 
     private fun loadData() {
@@ -112,7 +102,7 @@ class MainActivity : Activity() {
             runOnUiThread {
                 contacts = cs
                 recentEntries = rec
-                recentsAdapter.set(rec.map { toRow(it) })
+                applyRecentsFilter()
                 applyContactFilter()
                 refreshTyped()
                 contactsInfo.visibility =
@@ -140,7 +130,7 @@ class MainActivity : Activity() {
     private fun buildUi() {
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(Color.WHITE)
+        root.setBackgroundColor(BG)
 
         val frame = FrameLayout(this)
         root.addView(frame, LinearLayout.LayoutParams(MATCH, 0, 1f))
@@ -154,7 +144,7 @@ class MainActivity : Activity() {
 
         val nav = LinearLayout(this)
         nav.orientation = LinearLayout.HORIZONTAL
-        nav.setBackgroundColor(Color.parseColor("#F3F4F6"))
+        nav.setBackgroundColor(BAR)
         val labels = arrayOf("⌨\nDialer", "🕘\nRecents", "👤\nContacts")
         for (i in labels.indices) {
             val b = TextView(this)
@@ -179,10 +169,8 @@ class MainActivity : Activity() {
         for (idx in tabButtons.indices) {
             tabButtons[idx].setTextColor(if (idx == i) GREEN else GRAY)
         }
-        if (i != 2) {
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.hideSoftInputFromWindow(searchBox.windowToken, 0)
-        }
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(window.decorView.windowToken, 0)
     }
 
     private fun buildDialer(): LinearLayout {
@@ -191,7 +179,7 @@ class MainActivity : Activity() {
 
         val list = ListView(this)
         list.divider = null
-        suggestAdapter = RowAdapter(this) { r -> if (r.number.isNotEmpty()) placeCall(r.number) }
+        suggestAdapter = RowAdapter(this) { r -> Actions.call(this, r.number) }
         list.adapter = suggestAdapter
         list.setOnItemClickListener { _, _, pos, _ ->
             val r = suggestAdapter.getItem(pos)
@@ -252,10 +240,7 @@ class MainActivity : Activity() {
         callBtn.text = "📞"
         callBtn.textSize = 26f
         callBtn.gravity = Gravity.CENTER
-        val bg = GradientDrawable()
-        bg.shape = GradientDrawable.OVAL
-        bg.setColor(GREEN)
-        callBtn.background = bg
+        callBtn.background = circleBg(GREEN)
         callBtn.setOnClickListener { onDialCall() }
         val clp = LinearLayout.LayoutParams(dp(68), dp(68))
         clp.gravity = Gravity.CENTER_HORIZONTAL
@@ -264,16 +249,6 @@ class MainActivity : Activity() {
         p.addView(callBtn, clp)
 
         return p
-    }
-
-    private fun pressBg(): StateListDrawable {
-        val sl = StateListDrawable()
-        val pressed = GradientDrawable()
-        pressed.shape = GradientDrawable.OVAL
-        pressed.setColor(Color.parseColor("#E3E5E8"))
-        sl.addState(intArrayOf(android.R.attr.state_pressed), pressed)
-        sl.addState(intArrayOf(), ColorDrawable(Color.TRANSPARENT))
-        return sl
     }
 
     private fun keyView(d: String, letters: String): TextView {
@@ -308,14 +283,30 @@ class MainActivity : Activity() {
         val p = LinearLayout(this)
         p.orientation = LinearLayout.VERTICAL
 
+        recentsChips = Chips(this, listOf("Sabhi", "Missed", "Incoming", "Outgoing")) {
+            applyRecentsFilter()
+        }
+        p.addView(recentsChips.view, LinearLayout.LayoutParams(MATCH, WRAP))
+
+        recentsSearch = EditText(this)
+        recentsSearch.themed("Naam ya number se search karo")
+        recentsSearch.setSingleLine()
+        recentsSearch.onChange { applyRecentsFilter() }
+        val slp = LinearLayout.LayoutParams(MATCH, WRAP)
+        slp.setMargins(dp(16), 0, dp(16), dp(4))
+        p.addView(recentsSearch, slp)
+
         recentsInfo = infoView()
         p.addView(recentsInfo, LinearLayout.LayoutParams(MATCH, WRAP))
 
         val list = ListView(this)
         list.divider = null
-        recentsAdapter = RowAdapter(this) { r -> if (r.number.isNotEmpty()) placeCall(r.number) }
+        recentsAdapter = RowAdapter(this) { r -> Actions.call(this, r.number) }
         list.adapter = recentsAdapter
-        list.setOnItemClickListener { _, _, pos, _ -> showOptions(recentsAdapter.getItem(pos)) }
+        list.setOnItemClickListener { _, _, pos, _ ->
+            val r = recentsAdapter.getItem(pos)
+            if (r.number.isNotEmpty()) Actions.openDetail(this, r.number, r.name)
+        }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
         return p
     }
@@ -324,20 +315,17 @@ class MainActivity : Activity() {
         val p = LinearLayout(this)
         p.orientation = LinearLayout.VERTICAL
 
+        contactsChips = Chips(this, listOf("Sabhi", "★ Favorites")) {
+            applyContactFilter()
+        }
+        p.addView(contactsChips.view, LinearLayout.LayoutParams(MATCH, WRAP))
+
         searchBox = EditText(this)
-        searchBox.hint = "Naam ya number se search karo"
+        searchBox.themed("Naam ya number se search karo")
         searchBox.setSingleLine()
-        searchBox.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) {
-                applyContactFilter()
-            }
-
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-        })
+        searchBox.onChange { applyContactFilter() }
         val slp = LinearLayout.LayoutParams(MATCH, WRAP)
-        slp.setMargins(dp(16), dp(8), dp(16), dp(4))
+        slp.setMargins(dp(16), 0, dp(16), dp(4))
         p.addView(searchBox, slp)
 
         contactsInfo = infoView()
@@ -345,9 +333,12 @@ class MainActivity : Activity() {
 
         val list = ListView(this)
         list.divider = null
-        contactsAdapter = RowAdapter(this) { r -> if (r.number.isNotEmpty()) placeCall(r.number) }
+        contactsAdapter = RowAdapter(this) { r -> Actions.call(this, r.number) }
         list.adapter = contactsAdapter
-        list.setOnItemClickListener { _, _, pos, _ -> showOptions(contactsAdapter.getItem(pos)) }
+        list.setOnItemClickListener { _, _, pos, _ ->
+            val r = contactsAdapter.getItem(pos)
+            if (r.number.isNotEmpty()) Actions.openDetail(this, r.number, r.name)
+        }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
         return p
     }
@@ -376,17 +367,47 @@ class MainActivity : Activity() {
         suggestAdapter.set(Data.match(contacts, d).map { Row(it.name, it.number, it.number, it.name) })
     }
 
+    private fun applyRecentsFilter() {
+        val q = recentsSearch.text.toString().trim().lowercase()
+        val qd = q.filter { it.isDigit() }
+        val f = recentsChips.selected
+        val list = recentEntries.filter { e ->
+            val typeOk = when (f) {
+                1 -> e.type == 3 || e.type == 5
+                2 -> e.type == 1
+                3 -> e.type == 2
+                else -> true
+            }
+            val nameOk = e.name?.lowercase()?.contains(q) == true
+            val numOk = qd.isNotEmpty() && Data.digitsOf(e.number).contains(qd)
+            typeOk && (q.isEmpty() || nameOk || numOk)
+        }
+        recentsAdapter.set(list.map { toRow(it) })
+    }
+
     private fun applyContactFilter() {
         val q = searchBox.text.toString().trim().lowercase()
         val qd = q.filter { it.isDigit() }
-        val list = if (q.isEmpty()) {
-            contacts
+        val base: List<Row> = if (contactsChips.selected == 1) {
+            Store.favs(this).map {
+                Row(
+                    if (it.name.isEmpty()) it.number else it.name,
+                    it.number,
+                    it.number,
+                    if (it.name.isEmpty()) null else it.name
+                )
+            }
         } else {
-            contacts.filter {
-                it.name.lowercase().contains(q) || (qd.isNotEmpty() && it.digits.contains(qd))
+            contacts.map { Row(it.name, it.number, it.number, it.name) }
+        }
+        val list = if (q.isEmpty()) {
+            base
+        } else {
+            base.filter {
+                it.title.lowercase().contains(q) || (qd.isNotEmpty() && Data.digitsOf(it.number).contains(qd))
             }
         }
-        contactsAdapter.set(list.map { Row(it.name, it.number, it.number, it.name) })
+        contactsAdapter.set(list)
     }
 
     private fun handleIntent(i: Intent?) {
@@ -408,74 +429,6 @@ class MainActivity : Activity() {
             }
             return
         }
-        placeCall(typed.toString())
-    }
-
-    private fun placeCall(number: String) {
-        val n = Data.cleanNumber(number)
-        if (n.isEmpty()) return
-        if (!has(Manifest.permission.CALL_PHONE)) {
-            pendingCall = n
-            requestPermissions(arrayOf(Manifest.permission.CALL_PHONE), 2)
-            return
-        }
-        try {
-            startActivity(Intent(Intent.ACTION_CALL, Uri.fromParts("tel", n, null)))
-        } catch (e: Exception) {
-            toast("Call nahi lag paya")
-        }
-    }
-
-    private fun showOptions(r: Row) {
-        if (r.number.isEmpty()) return
-        val labels = ArrayList<String>()
-        val acts = ArrayList<() -> Unit>()
-
-        labels.add("📞  Call")
-        acts.add { placeCall(r.number) }
-
-        labels.add("💬  SMS")
-        acts.add {
-            safeStart(Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", Data.cleanNumber(r.number), null)))
-        }
-
-        labels.add("🟢  WhatsApp")
-        acts.add {
-            safeStart(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + Data.waNumber(r.number))))
-        }
-
-        labels.add("📋  Number copy karo")
-        acts.add {
-            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("number", r.number))
-            toast("Copy ho gaya")
-        }
-
-        if (r.name == null) {
-            labels.add("➕  Contact save karo")
-            acts.add {
-                val i = Intent(ContactsContract.Intents.Insert.ACTION)
-                i.type = ContactsContract.RawContacts.CONTENT_TYPE
-                i.putExtra(ContactsContract.Intents.Insert.PHONE, r.number)
-                safeStart(i)
-            }
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle(r.name ?: r.number)
-            .setItems(labels.toTypedArray()) { _, i -> acts[i]() }
-            .show()
-    }
-
-    private fun safeStart(i: Intent) {
-        try {
-            startActivity(i)
-        } catch (e: Exception) {
-            toast("Ye app phone mein nahi mila")
-        }
-    }
-
-    private fun toast(msg: String) {
-        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        Actions.call(this, typed.toString())
     }
 }
