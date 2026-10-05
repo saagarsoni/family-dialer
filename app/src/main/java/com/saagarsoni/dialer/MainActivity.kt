@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.SpannableString
@@ -34,6 +35,7 @@ class MainActivity : Activity() {
     private lateinit var contactsPane: LinearLayout
     private lateinit var numberView: TextView
     private lateinit var backView: TextView
+    private lateinit var defaultBanner: TextView
     private lateinit var searchBox: EditText
     private lateinit var recentsSearch: EditText
     private lateinit var contactsInfo: TextView
@@ -67,7 +69,20 @@ class MainActivity : Activity() {
         } else {
             applyContactFilter()
         }
+        updateBanner()
         Actions.checkPostCall(this)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == DefaultDialer.REQ) {
+            updateBanner()
+            if (DefaultDialer.isDefault(this)) toast("Sampark ab default dialer hai")
+        }
+    }
+
+    private fun updateBanner() {
+        defaultBanner.visibility = if (DefaultDialer.isDefault(this)) View.GONE else View.VISIBLE
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -82,7 +97,9 @@ class MainActivity : Activity() {
         checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
 
     private fun ensurePermissions() {
-        val missing = permsWanted.filter { !has(it) }
+        val want = permsWanted.toMutableList()
+        if (Build.VERSION.SDK_INT >= 33) want.add(Manifest.permission.POST_NOTIFICATIONS)
+        val missing = want.filter { !has(it) }
         if (missing.isEmpty()) loadData() else requestPermissions(missing.toTypedArray(), 1)
     }
 
@@ -176,6 +193,16 @@ class MainActivity : Activity() {
     private fun buildDialer(): LinearLayout {
         val p = LinearLayout(this)
         p.orientation = LinearLayout.VERTICAL
+
+        defaultBanner = TextView(this)
+        defaultBanner.text = "📞  Sampark ko default dialer banao: incoming call ki apni screen aur call controls milenge. Yahan tap karo."
+        defaultBanner.textSize = 13f
+        defaultBanner.setTextColor(Color.WHITE)
+        defaultBanner.setPadding(dp(16), dp(10), dp(16), dp(10))
+        defaultBanner.setBackgroundColor(GREEN)
+        defaultBanner.visibility = View.GONE
+        defaultBanner.setOnClickListener { DefaultDialer.request(this) }
+        p.addView(defaultBanner, LinearLayout.LayoutParams(MATCH, WRAP))
 
         val list = ListView(this)
         list.divider = null

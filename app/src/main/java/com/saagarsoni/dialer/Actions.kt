@@ -26,6 +26,10 @@ object Actions {
     private var pendingNumber: String? = null
     private var pendingAt: Long = 0L
 
+    fun clearPending() {
+        pendingNumber = null
+    }
+
     fun call(act: Activity, number: String) {
         val n = Data.cleanNumber(number)
         if (n.isEmpty()) return
@@ -83,6 +87,7 @@ object Actions {
 
     fun checkPostCall(act: Activity) {
         val n = pendingNumber ?: return
+        if (CallManager.hasCalls()) return
         val age = System.currentTimeMillis() - pendingAt
         if (age > 6L * 3600L * 1000L) {
             pendingNumber = null
@@ -90,10 +95,10 @@ object Actions {
         }
         if (age < 2500L) return
         pendingNumber = null
-        showPostCall(act, n)
+        showPostCall(act, n) {}
     }
 
-    private fun showPostCall(act: Activity, number: String) {
+    fun showPostCall(act: Activity, number: String, onDone: () -> Unit) {
         val name = Data.lookupName(act, number)
 
         val box = LinearLayout(act)
@@ -126,13 +131,40 @@ object Actions {
                     Store.addNote(act, number, t)
                     act.toast("Note save ho gaya")
                 }
+                onDone()
             }
             .setNeutralButton("Reminder") { _, _ ->
                 val t = et.text.toString().trim()
                 if (t.isNotEmpty()) Store.addNote(act, number, t)
-                askReminder(act, number, name, t)
+                askReminder(act, number, name, t, onDone)
             }
-            .setNegativeButton("Band karo", null)
+            .setNegativeButton("Band karo") { _, _ -> onDone() }
+            .setOnCancelListener { onDone() }
+            .create()
+        dlg.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        dlg.show()
+    }
+
+    fun quickNote(act: Activity, number: String) {
+        val box = LinearLayout(act)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(act.dp(20), act.dp(8), act.dp(20), act.dp(4))
+        val et = EditText(act)
+        et.themed("Note likho...")
+        et.minLines = 2
+        et.gravity = Gravity.TOP
+        box.addView(et, LinearLayout.LayoutParams(MATCH, WRAP))
+        val dlg = AlertDialog.Builder(act, dialogTheme())
+            .setTitle("Call note")
+            .setView(box)
+            .setPositiveButton("Save") { _, _ ->
+                val t = et.text.toString().trim()
+                if (t.isNotEmpty()) {
+                    Store.addNote(act, number, t)
+                    act.toast("Note save ho gaya")
+                }
+            }
+            .setNegativeButton("Cancel", null)
             .create()
         dlg.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
         dlg.show()
@@ -141,6 +173,10 @@ object Actions {
     // ---------- reminders ----------
 
     fun askReminder(act: Activity, number: String, name: String?, msg: String) {
+        askReminder(act, number, name, msg) {}
+    }
+
+    fun askReminder(act: Activity, number: String, name: String?, msg: String, onDone: () -> Unit) {
         val labels = arrayOf(
             "15 minute baad",
             "1 ghante baad",
@@ -152,7 +188,7 @@ object Actions {
             .setTitle("Kab yaad dilau?")
             .setItems(labels) { _, i ->
                 if (i == 4) {
-                    pickCustom(act, number, name, msg)
+                    pickCustom(act, number, name, msg, onDone)
                 } else {
                     val cal = Calendar.getInstance()
                     when (i) {
@@ -174,18 +210,20 @@ object Actions {
                         }
                     }
                     setReminder(act, cal.timeInMillis, number, name, msg)
+                    onDone()
                 }
             }
+            .setOnCancelListener { onDone() }
             .show()
     }
 
-    private fun pickCustom(act: Activity, number: String, name: String?, msg: String) {
+    private fun pickCustom(act: Activity, number: String, name: String?, msg: String, onDone: () -> Unit) {
         val now = Calendar.getInstance()
-        DatePickerDialog(
+        val datePicker = DatePickerDialog(
             act,
             dialogTheme(),
             { _, y, m, d ->
-                TimePickerDialog(
+                val timePicker = TimePickerDialog(
                     act,
                     dialogTheme(),
                     { _, h, mi ->
@@ -193,16 +231,21 @@ object Actions {
                         c.set(y, m, d, h, mi, 0)
                         c.set(Calendar.MILLISECOND, 0)
                         setReminder(act, c.timeInMillis, number, name, msg)
+                        onDone()
                     },
                     10,
                     0,
                     false
-                ).show()
+                )
+                timePicker.setOnCancelListener { onDone() }
+                timePicker.show()
             },
             now.get(Calendar.YEAR),
             now.get(Calendar.MONTH),
             now.get(Calendar.DAY_OF_MONTH)
-        ).show()
+        )
+        datePicker.setOnCancelListener { onDone() }
+        datePicker.show()
     }
 
     private fun setReminder(act: Activity, at: Long, number: String, name: String?, msg: String) {
