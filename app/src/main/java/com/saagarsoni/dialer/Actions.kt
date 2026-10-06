@@ -133,7 +133,19 @@ object Actions {
         showPostCall(act, n) {}
     }
 
+    fun postCallWanted(ctx: Context, number: String): Boolean {
+        return when (Store.getInt(ctx, "postcall_mode", 0)) {
+            1 -> Store.tagsOf(ctx, number).isNotEmpty()
+            2 -> false
+            else -> true
+        }
+    }
+
     fun showPostCall(act: Activity, number: String, onDone: () -> Unit) {
+        if (!postCallWanted(act, number)) {
+            onDone()
+            return
+        }
         val name = Data.lookupName(act, number)
 
         val box = LinearLayout(act)

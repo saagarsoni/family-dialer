@@ -155,6 +155,33 @@ fun EditText.onChange(cb: () -> Unit) {
     })
 }
 
+fun searchField(ctx: Context, hintText: String, cb: () -> Unit): Pair<LinearLayout, EditText> {
+    val box = LinearLayout(ctx)
+    box.orientation = LinearLayout.HORIZONTAL
+    box.gravity = Gravity.CENTER_VERTICAL
+    val bg = GradientDrawable()
+    bg.cornerRadius = ctx.dp(24).toFloat()
+    bg.setColor(BAR)
+    bg.setStroke(ctx.dp(1), GRAY)
+    box.background = bg
+    box.setPadding(ctx.dp(14), 0, ctx.dp(10), 0)
+
+    val icon = TextView(ctx)
+    icon.text = "🔍"
+    icon.textSize = 16f
+    box.addView(icon, LinearLayout.LayoutParams(WRAP, WRAP))
+
+    val et = EditText(ctx)
+    et.themed(hintText)
+    et.setSingleLine()
+    et.textSize = 15f
+    et.setBackgroundColor(Color.TRANSPARENT)
+    et.setPadding(ctx.dp(10), ctx.dp(11), ctx.dp(8), ctx.dp(11))
+    et.onChange(cb)
+    box.addView(et, LinearLayout.LayoutParams(0, WRAP, 1f))
+    return Pair(box, et)
+}
+
 data class Row(
     val title: String,
     val sub: String,

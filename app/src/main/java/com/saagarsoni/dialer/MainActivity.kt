@@ -35,7 +35,6 @@ class MainActivity : Activity() {
     private lateinit var contactsPane: LinearLayout
     private lateinit var numberView: TextView
     private lateinit var backView: TextView
-    private lateinit var defaultBanner: TextView
     private lateinit var searchBox: EditText
     private lateinit var recentsSearch: EditText
     private lateinit var contactsInfo: TextView
@@ -81,14 +80,12 @@ class MainActivity : Activity() {
         } else {
             applyContactFilter()
         }
-        updateBanner()
         Actions.checkPostCall(this)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == DefaultDialer.REQ) {
-            updateBanner()
             if (DefaultDialer.isDefault(this)) toast("Sampark ab default dialer hai")
         } else if (requestCode == SettingsActivity.REQ_PICK && resultCode == RESULT_OK) {
             val f = Actions.readPicked(this, data)
@@ -98,10 +95,6 @@ class MainActivity : Activity() {
             }
             pendingDigit = ""
         }
-    }
-
-    private fun updateBanner() {
-        defaultBanner.visibility = if (DefaultDialer.isDefault(this)) View.GONE else View.VISIBLE
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -222,16 +215,6 @@ class MainActivity : Activity() {
     private fun buildDialer(): LinearLayout {
         val p = LinearLayout(this)
         p.orientation = LinearLayout.VERTICAL
-
-        defaultBanner = TextView(this)
-        defaultBanner.text = "📞  Sampark ko default dialer banao: incoming call ki apni screen aur call controls milenge. Yahan tap karo."
-        defaultBanner.textSize = 13f
-        defaultBanner.setTextColor(Color.WHITE)
-        defaultBanner.setPadding(dp(16), dp(10), dp(16), dp(10))
-        defaultBanner.setBackgroundColor(GREEN)
-        defaultBanner.visibility = View.GONE
-        defaultBanner.setOnClickListener { DefaultDialer.request(this) }
-        p.addView(defaultBanner, LinearLayout.LayoutParams(MATCH, WRAP))
 
         val list = ListView(this)
         list.divider = null
@@ -369,15 +352,12 @@ class MainActivity : Activity() {
         recentsChips = Chips(this, listOf("Sabhi", "Missed", "Incoming", "Outgoing")) {
             applyRecentsFilter()
         }
-        p.addView(recentsChips.view, LinearLayout.LayoutParams(MATCH, WRAP))
 
-        recentsSearch = EditText(this)
-        recentsSearch.themed("Naam ya number se search karo")
-        recentsSearch.setSingleLine()
-        recentsSearch.onChange { applyRecentsFilter() }
+        val sf = searchField(this, "Naam ya number se search karo") { applyRecentsFilter() }
+        recentsSearch = sf.second
         val slp = LinearLayout.LayoutParams(MATCH, WRAP)
-        slp.setMargins(dp(16), 0, dp(16), dp(4))
-        p.addView(recentsSearch, slp)
+        slp.setMargins(dp(16), dp(8), dp(16), dp(6))
+        p.addView(sf.first, slp)
 
         recentsInfo = infoView()
         p.addView(recentsInfo, LinearLayout.LayoutParams(MATCH, WRAP))
@@ -391,6 +371,7 @@ class MainActivity : Activity() {
             if (r.number.isNotEmpty()) Actions.openDetail(this, r.number, r.name)
         }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
+        p.addView(recentsChips.view, LinearLayout.LayoutParams(MATCH, WRAP))
         return p
     }
 
@@ -399,15 +380,12 @@ class MainActivity : Activity() {
         p.orientation = LinearLayout.VERTICAL
 
         chipsHolder = FrameLayout(this)
-        p.addView(chipsHolder, LinearLayout.LayoutParams(MATCH, WRAP))
 
-        searchBox = EditText(this)
-        searchBox.themed("Naam ya number se search karo")
-        searchBox.setSingleLine()
-        searchBox.onChange { applyContactFilter() }
+        val sf = searchField(this, "Naam ya number se search karo") { applyContactFilter() }
+        searchBox = sf.second
         val slp = LinearLayout.LayoutParams(MATCH, WRAP)
-        slp.setMargins(dp(16), 0, dp(16), dp(4))
-        p.addView(searchBox, slp)
+        slp.setMargins(dp(16), dp(8), dp(16), dp(6))
+        p.addView(sf.first, slp)
 
         contactsInfo = infoView()
         p.addView(contactsInfo, LinearLayout.LayoutParams(MATCH, WRAP))
@@ -421,6 +399,7 @@ class MainActivity : Activity() {
             if (r.number.isNotEmpty()) Actions.openDetail(this, r.number, r.name)
         }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
+        p.addView(chipsHolder, LinearLayout.LayoutParams(MATCH, WRAP))
         return p
     }
 

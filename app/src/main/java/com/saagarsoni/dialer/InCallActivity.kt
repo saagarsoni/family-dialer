@@ -42,6 +42,7 @@ class InCallActivity : Activity() {
     private var ending = false
     private var keypadOpen = false
     private var accountDialog: AlertDialog? = null
+    private var chosenFor: Call? = null
 
     private lateinit var stateView: TextView
     private lateinit var avatar: TextView
@@ -406,6 +407,7 @@ class InCallActivity : Activity() {
 
     private fun askAccount(call: Call) {
         if (accountDialog != null) return
+        if (call === chosenFor) return
         val tm = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
         val handles: List<PhoneAccountHandle> = try {
             tm.callCapablePhoneAccounts
@@ -430,6 +432,7 @@ class InCallActivity : Activity() {
             .setTitle("Kis SIM se call karu?")
             .setItems(labels.toTypedArray()) { _, i ->
                 accountDialog = null
+                chosenFor = call
                 call.phoneAccountSelected(handles[i], false)
             }
             .setOnCancelListener {

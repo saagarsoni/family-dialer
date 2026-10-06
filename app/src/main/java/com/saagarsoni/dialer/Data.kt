@@ -323,7 +323,7 @@ object Data {
         return when (d1) {
             d0 -> "Aaj, $t"
             dy -> "Kal, $t"
-            else -> SimpleDateFormat("d MMM, h:mm a", Locale.getDefault()).format(Date(ms))
+            else -> SimpleDateFormat("d MMM yyyy, h:mm a", Locale.getDefault()).format(Date(ms))
         }
     }
 

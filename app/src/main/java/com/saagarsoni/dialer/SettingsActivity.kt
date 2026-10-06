@@ -182,6 +182,18 @@ class SettingsActivity : Activity() {
             }
         )
 
+        val pcNames = arrayOf("Hamesha", "Sirf tag wale contacts ke liye", "Kabhi nahi")
+        val pc = Store.getInt(this, "postcall_mode", 0).coerceIn(0, 2)
+        add(
+            row(
+                "Call ke baad note popup: " + pcNames[pc],
+                "Call khatam hone par note / reminder wala popup. Tap karke badlo"
+            ) {
+                Store.putInt(this, "postcall_mode", (pc + 1) % 3)
+                render()
+            }
+        )
+
         // birthdays
         add(section("🎂  Birthdays"))
         val on = Birthdays.enabled(this)
@@ -268,7 +280,7 @@ class SettingsActivity : Activity() {
         })
 
         add(section("ℹ️  About"))
-        add(row("Sampark v1.3", "Saagar ka apna dialer", null))
+        add(row("Sampark v1.5", "Saagar ka apna dialer", null))
     }
 
     // ---------- actions ----------

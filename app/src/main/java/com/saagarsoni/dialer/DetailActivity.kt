@@ -29,6 +29,8 @@ class DetailActivity : Activity() {
     private lateinit var tagBox: LinearLayout
     private lateinit var recTitle: TextView
     private lateinit var recBox: LinearLayout
+    private var recOpen = false
+    private var recCount = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -232,6 +234,12 @@ class DetailActivity : Activity() {
         // recordings
         recTitle = sectionTitle("🎙  Call recordings")
         recTitle.visibility = View.GONE
+        recTitle.setOnClickListener {
+            if (recCount > 0) {
+                recOpen = !recOpen
+                updateRecTitle()
+            }
+        }
         col.addView(recTitle)
         recBox = LinearLayout(this)
         recBox.orientation = LinearLayout.VERTICAL
@@ -336,6 +344,9 @@ class DetailActivity : Activity() {
         }
         if (!Recordings.hasAccess(this)) {
             recTitle.visibility = View.VISIBLE
+            recTitle.text = "🎙  Call recordings"
+            recBox.visibility = View.VISIBLE
+            recCount = 0
             val h = hint("Samsung ki call recordings dekhne ke liye yahan tap karke permission do")
             h.setTextColor(GREEN)
             h.setOnClickListener { requestPermissions(arrayOf(Recordings.permission()), 5) }
@@ -348,9 +359,16 @@ class DetailActivity : Activity() {
         }.start()
     }
 
+    private fun updateRecTitle() {
+        recTitle.text = "🎙  Call recordings ($recCount)   " + (if (recOpen) "▴" else "▾")
+        recBox.visibility = if (recOpen) View.VISIBLE else View.GONE
+    }
+
     private fun fillRecordings(list: List<Rec>) {
         recBox.removeAllViews()
+        recCount = list.size
         recTitle.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+        if (list.isNotEmpty()) updateRecTitle()
         for (r in list) {
             val dur = Data.fmtDur(r.durMs / 1000L)
             val t = TextView(this)
