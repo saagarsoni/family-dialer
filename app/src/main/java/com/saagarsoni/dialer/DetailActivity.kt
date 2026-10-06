@@ -27,6 +27,8 @@ class DetailActivity : Activity() {
 
     private var stamp = 0
     private lateinit var tagBox: LinearLayout
+    private lateinit var recTitle: TextView
+    private lateinit var recBox: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -227,6 +229,14 @@ class DetailActivity : Activity() {
         remBox.orientation = LinearLayout.VERTICAL
         col.addView(remBox, LinearLayout.LayoutParams(MATCH, WRAP))
 
+        // recordings
+        recTitle = sectionTitle("🎙  Call recordings")
+        recTitle.visibility = View.GONE
+        col.addView(recTitle)
+        recBox = LinearLayout(this)
+        recBox.orientation = LinearLayout.VERTICAL
+        col.addView(recBox, LinearLayout.LayoutParams(MATCH, WRAP))
+
         // history
         col.addView(sectionTitle("📞  Call history"))
         histBox = LinearLayout(this)
@@ -318,9 +328,65 @@ class DetailActivity : Activity() {
             .show()
     }
 
+    private fun refreshRecordings() {
+        recBox.removeAllViews()
+        if (number.isEmpty()) {
+            recTitle.visibility = View.GONE
+            return
+        }
+        if (!Recordings.hasAccess(this)) {
+            recTitle.visibility = View.VISIBLE
+            val h = hint("Samsung ki call recordings dekhne ke liye yahan tap karke permission do")
+            h.setTextColor(GREEN)
+            h.setOnClickListener { requestPermissions(arrayOf(Recordings.permission()), 5) }
+            recBox.addView(h)
+            return
+        }
+        Thread {
+            val list = Recordings.forContact(this, number, name)
+            runOnUiThread { fillRecordings(list) }
+        }.start()
+    }
+
+    private fun fillRecordings(list: List<Rec>) {
+        recBox.removeAllViews()
+        recTitle.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+        for (r in list) {
+            val dur = Data.fmtDur(r.durMs / 1000L)
+            val t = TextView(this)
+            t.text = "▶   " + Data.fmtTime(r.ts) + (if (dur.isNotEmpty()) " • $dur" else "")
+            t.textSize = 15f
+            t.setTextColor(INK)
+            t.setPadding(0, dp(10), 0, dp(10))
+            t.setOnClickListener { playRec(r) }
+            recBox.addView(t, LinearLayout.LayoutParams(MATCH, WRAP))
+        }
+    }
+
+    private fun playRec(r: Rec) {
+        val i = android.content.Intent(android.content.Intent.ACTION_VIEW)
+        i.setDataAndType(r.uri, "audio/*")
+        i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            startActivity(i)
+        } catch (e: Exception) {
+            toast("Recording chalane wala app nahi mila")
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        refreshRecordings()
+    }
+
     private fun refresh() {
         updateStar()
         refreshTags()
+        refreshRecordings()
         refreshNotes()
         refreshReminders()
         Thread {
