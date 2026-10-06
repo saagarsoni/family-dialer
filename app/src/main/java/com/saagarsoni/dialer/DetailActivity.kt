@@ -371,13 +371,32 @@ class DetailActivity : Activity() {
         if (list.isNotEmpty()) updateRecTitle()
         for (r in list) {
             val dur = Data.fmtDur(r.durMs / 1000L)
+            val line = LinearLayout(this)
+            line.orientation = LinearLayout.HORIZONTAL
+            line.gravity = Gravity.CENTER_VERTICAL
             val t = TextView(this)
             t.text = "▶   " + Data.fmtTime(r.ts) + (if (dur.isNotEmpty()) " • $dur" else "")
             t.textSize = 15f
             t.setTextColor(INK)
             t.setPadding(0, dp(10), 0, dp(10))
             t.setOnClickListener { playRec(r) }
-            recBox.addView(t, LinearLayout.LayoutParams(MATCH, WRAP))
+            line.addView(t, LinearLayout.LayoutParams(0, WRAP, 1f))
+            val sh = iconBtn("📤") { shareRec(r) }
+            sh.textSize = 20f
+            line.addView(sh, LinearLayout.LayoutParams(dp(48), dp(44)))
+            recBox.addView(line, LinearLayout.LayoutParams(MATCH, WRAP))
+        }
+    }
+
+    private fun shareRec(r: Rec) {
+        val i = android.content.Intent(android.content.Intent.ACTION_SEND)
+        i.type = "audio/*"
+        i.putExtra(android.content.Intent.EXTRA_STREAM, r.uri)
+        i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            startActivity(android.content.Intent.createChooser(i, "Recording share karo"))
+        } catch (e: Exception) {
+            toast("Share nahi ho paya")
         }
     }
 

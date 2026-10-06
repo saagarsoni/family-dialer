@@ -28,12 +28,59 @@ class MainActivity : Activity() {
 
     private var contacts: List<Contact> = emptyList()
     private var recentEntries: List<CallEntry> = emptyList()
-    private var typed = StringBuilder()
+    private val typedText: String get() = numberView.text.toString()
+
+    private fun setTyped(v: String) {
+        numberView.setText(v)
+        numberView.setSelection(numberView.text.length)
+    }
+
+    private fun insertTyped(v: String) {
+        val e = numberView.text
+        var pos = numberView.selectionStart
+        if (pos < 0 || pos > e.length) pos = e.length
+        val end = numberView.selectionEnd
+        if (end > pos) e.replace(pos, end, v) else e.insert(pos, v)
+        numberView.setSelection(pos + v.length)
+    }
+
+    private fun backspaceTyped() {
+        val e = numberView.text
+        if (e.isEmpty()) return
+        var a = numberView.selectionStart
+        var b = numberView.selectionEnd
+        if (a < 0) {
+            a = e.length
+            b = a
+        }
+        if (a == b) {
+            if (a == 0) return
+            e.delete(a - 1, a)
+            numberView.setSelection(a - 1)
+        } else {
+            val lo = minOf(a, b)
+            e.delete(lo, maxOf(a, b))
+            numberView.setSelection(lo)
+        }
+    }
+
+    private fun pasteFromClipboard() {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = cm.primaryClip
+        val raw = if (clip != null && clip.itemCount > 0) clip.getItemAt(0).coerceToText(this).toString() else ""
+        val clean = Data.cleanNumber(raw)
+        if (clean.isEmpty()) {
+            toast("Clipboard mein number nahi mila")
+        } else {
+            insertTyped(clean)
+        }
+    }
 
     private lateinit var dialerPane: LinearLayout
     private lateinit var recentsPane: LinearLayout
     private lateinit var contactsPane: LinearLayout
-    private lateinit var numberView: TextView
+    private lateinit var numberView: EditText
+    private lateinit var pasteView: TextView
     private lateinit var backView: TextView
     private lateinit var searchBox: EditText
     private lateinit var recentsSearch: EditText
@@ -222,8 +269,7 @@ class MainActivity : Activity() {
         list.adapter = suggestAdapter
         list.setOnItemClickListener { _, _, pos, _ ->
             val r = suggestAdapter.getItem(pos)
-            typed = StringBuilder(Data.cleanNumber(r.number))
-            refreshTyped()
+            setTyped(Data.cleanNumber(r.number))
         }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
 
@@ -231,12 +277,25 @@ class MainActivity : Activity() {
         numRow.orientation = LinearLayout.HORIZONTAL
         numRow.gravity = Gravity.CENTER_VERTICAL
 
-        numberView = TextView(this)
+        numberView = EditText(this)
         numberView.textSize = 32f
         numberView.setTextColor(INK)
         numberView.gravity = Gravity.CENTER
         numberView.setSingleLine()
-        numberView.ellipsize = TextUtils.TruncateAt.START
+        numberView.setBackgroundColor(Color.TRANSPARENT)
+        numberView.showSoftInputOnFocus = false
+        numberView.isCursorVisible = true
+        numberView.filters = arrayOf(
+            android.text.InputFilter { src, st, en, _, _, _ ->
+                val sb = StringBuilder()
+                for (i in st until en) {
+                    val c = src[i]
+                    if (c.isDigit() || c == '+' || c == '*' || c == '#') sb.append(c)
+                }
+                if (sb.length == en - st) null else sb.toString()
+            }
+        )
+        numberView.onChange { refreshTyped() }
         val nlp = LinearLayout.LayoutParams(0, WRAP, 1f)
         nlp.leftMargin = dp(56)
         numRow.addView(numberView, nlp)
@@ -246,19 +305,22 @@ class MainActivity : Activity() {
         backView.textSize = 24f
         backView.setTextColor(GRAY)
         backView.gravity = Gravity.CENTER
-        backView.setOnClickListener {
-            if (typed.isNotEmpty()) {
-                typed.setLength(typed.length - 1)
-                refreshTyped()
-            }
-        }
+        backView.setOnClickListener { backspaceTyped() }
         backView.setOnLongClickListener {
-            typed.setLength(0)
-            refreshTyped()
+            numberView.setText("")
             true
         }
         numRow.addView(backView, LinearLayout.LayoutParams(dp(56), dp(56)))
         p.addView(numRow, LinearLayout.LayoutParams(MATCH, WRAP))
+
+        pasteView = TextView(this)
+        pasteView.text = "📋  Paste number"
+        pasteView.textSize = 13f
+        pasteView.setTextColor(GREEN)
+        pasteView.gravity = Gravity.CENTER
+        pasteView.setPadding(dp(16), dp(2), dp(16), dp(6))
+        pasteView.setOnClickListener { pasteFromClipboard() }
+        p.addView(pasteView, LinearLayout.LayoutParams(MATCH, WRAP))
 
         val keys = arrayOf(
             arrayOf("1" to "", "2" to "ABC", "3" to "DEF"),
@@ -305,18 +367,16 @@ class MainActivity : Activity() {
         t.isClickable = true
         t.setOnClickListener { v ->
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            typed.append(d)
-            refreshTyped()
+            insertTyped(d)
         }
         if (d == "0") {
             t.setOnLongClickListener {
-                typed.append("+")
-                refreshTyped()
+                insertTyped("+")
                 true
             }
         } else if (d.length == 1 && d[0] in '1'..'9') {
             t.setOnLongClickListener {
-                if (typed.isEmpty()) {
+                if (typedText.isEmpty()) {
                     speedDial(d)
                     true
                 } else {
@@ -457,9 +517,10 @@ class MainActivity : Activity() {
     // ---------- behaviour ----------
 
     private fun refreshTyped() {
-        numberView.text = typed.toString()
-        backView.visibility = if (typed.isEmpty()) View.INVISIBLE else View.VISIBLE
-        val d = typed.toString().filter { it.isDigit() }
+        val empty = typedText.isEmpty()
+        backView.visibility = if (empty) View.INVISIBLE else View.VISIBLE
+        pasteView.visibility = if (empty) View.VISIBLE else View.INVISIBLE
+        val d = typedText.filter { it.isDigit() }
         suggestAdapter.set(Data.match(contacts, d).map { Row(it.name, it.number, it.number, it.name) })
     }
 
@@ -505,21 +566,17 @@ class MainActivity : Activity() {
         val data = i?.data ?: return
         if (data.scheme == "tel") {
             val n = Uri.decode(data.schemeSpecificPart ?: "")
-            typed = StringBuilder(Data.cleanNumber(n))
-            refreshTyped()
+            setTyped(Data.cleanNumber(n))
             showTab(0)
         }
     }
 
     private fun onDialCall() {
-        if (typed.isEmpty()) {
+        if (typedText.isEmpty()) {
             val last = recentEntries.firstOrNull { it.type == 2 && it.number.isNotEmpty() }
-            if (last != null) {
-                typed = StringBuilder(Data.cleanNumber(last.number))
-                refreshTyped()
-            }
+            if (last != null) setTyped(Data.cleanNumber(last.number))
             return
         }
-        Actions.call(this, typed.toString())
+        Actions.call(this, typedText)
     }
 }
