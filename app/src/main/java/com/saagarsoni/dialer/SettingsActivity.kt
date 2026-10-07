@@ -280,7 +280,7 @@ class SettingsActivity : Activity() {
         })
 
         add(section("ℹ️  About"))
-        add(row("Sampark v1.6", "Saagar ka apna dialer", null))
+        add(row("Sampark v1.7", "Saagar ka apna dialer", null))
     }
 
     // ---------- actions ----------

@@ -33,7 +33,8 @@ data class CallEntry(
     val type: Int,
     val date: Long,
     val duration: Long,
-    val count: Int
+    val count: Int,
+    val sim: String = ""
 )
 
 object Data {
@@ -110,7 +111,8 @@ object Data {
                     CallLog.Calls.CACHED_NAME,
                     CallLog.Calls.TYPE,
                     CallLog.Calls.DATE,
-                    CallLog.Calls.DURATION
+                    CallLog.Calls.DURATION,
+                    CallLog.Calls.PHONE_ACCOUNT_ID
                 ),
                 null,
                 null,
@@ -130,12 +132,13 @@ object Data {
                 val type = it.getInt(2)
                 val date = it.getLong(3)
                 val dur = it.getLong(4)
+                val sim = it.getString(5) ?: ""
                 val name = byKey[key10(number)] ?: (if (cached.isNullOrEmpty()) null else cached)
                 if (out.isNotEmpty() && out[out.size - 1].number == number) {
                     val prev = out[out.size - 1]
                     out[out.size - 1] = prev.copy(count = prev.count + 1)
                 } else {
-                    out.add(CallEntry(number, name, type, date, dur, 1))
+                    out.add(CallEntry(number, name, type, date, dur, 1, sim))
                 }
             }
         }
@@ -189,7 +192,8 @@ object Data {
                     CallLog.Calls.NUMBER,
                     CallLog.Calls.TYPE,
                     CallLog.Calls.DATE,
-                    CallLog.Calls.DURATION
+                    CallLog.Calls.DURATION,
+                    CallLog.Calls.PHONE_ACCOUNT_ID
                 ),
                 null,
                 null,
@@ -206,7 +210,7 @@ object Data {
                 scanned++
                 val n = it.getString(0) ?: ""
                 if (key10(n) != key) continue
-                out.add(CallEntry(n, null, it.getInt(1), it.getLong(2), it.getLong(3), 1))
+                out.add(CallEntry(n, null, it.getInt(1), it.getLong(2), it.getLong(3), 1, it.getString(4) ?: ""))
             }
         }
         return out
@@ -301,6 +305,40 @@ object Data {
         } catch (e: Exception) {
         }
         return out.sortedBy { daysUntil(it) }
+    }
+
+    // call log ka phone account id -> SIM ka naam (Jio / Airtel)
+    fun simLabels(ctx: Context): Map<String, String> {
+        val m = HashMap<String, String>()
+        try {
+            val tm = ctx.getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
+            for (h in tm.callCapablePhoneAccounts) {
+                val l = tm.getPhoneAccount(h)?.label?.toString()
+                if (!l.isNullOrEmpty()) m[h.id] = l
+            }
+        } catch (e: Exception) {
+        }
+        try {
+            val sm = ctx.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE)
+                as android.telephony.SubscriptionManager
+            val list = sm.activeSubscriptionInfoList
+            if (list != null) {
+                for (si in list) {
+                    val name = si.displayName?.toString() ?: ("SIM " + (si.simSlotIndex + 1))
+                    if (!m.containsKey(si.subscriptionId.toString())) m[si.subscriptionId.toString()] = name
+                    val icc = si.iccId
+                    if (icc != null && !m.containsKey(icc)) m[icc] = name
+                }
+            }
+        } catch (e: Exception) {
+        }
+        return m
+    }
+
+    fun simName(labels: Map<String, String>, id: String): String {
+        if (id.isEmpty()) return ""
+        if (labels.values.toSet().size < 2) return ""
+        return labels[id] ?: ""
     }
 
     fun typeLabel(type: Int): String = when (type) {

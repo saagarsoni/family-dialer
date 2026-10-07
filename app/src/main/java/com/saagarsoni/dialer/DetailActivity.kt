@@ -30,6 +30,10 @@ class DetailActivity : Activity() {
     private lateinit var recTitle: TextView
     private lateinit var recBox: LinearLayout
     private var recOpen = false
+    private lateinit var histTitle: TextView
+    private lateinit var histPreview: TextView
+    private var histOpen = false
+    private var histCount = 0
     private var recCount = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -246,7 +250,21 @@ class DetailActivity : Activity() {
         col.addView(recBox, LinearLayout.LayoutParams(MATCH, WRAP))
 
         // history
-        col.addView(sectionTitle("📞  Call history"))
+        histTitle = sectionTitle("📞  Call history")
+        histTitle.setOnClickListener {
+            if (histCount > 0) {
+                histOpen = !histOpen
+                updateHistTitle()
+            }
+        }
+        col.addView(histTitle)
+        histPreview = hint("")
+        histPreview.visibility = View.GONE
+        histPreview.setOnClickListener {
+            histOpen = true
+            updateHistTitle()
+        }
+        col.addView(histPreview)
         histBox = LinearLayout(this)
         histBox.orientation = LinearLayout.VERTICAL
         col.addView(histBox, LinearLayout.LayoutParams(MATCH, WRAP))
@@ -428,7 +446,8 @@ class DetailActivity : Activity() {
         refreshReminders()
         Thread {
             val h = Data.historyFor(this, number, 30)
-            runOnUiThread { fillHistory(h) }
+            val sims = Data.simLabels(this)
+            runOnUiThread { fillHistory(h, sims) }
         }.start()
     }
 
@@ -517,16 +536,35 @@ class DetailActivity : Activity() {
         }
     }
 
-    private fun fillHistory(list: List<CallEntry>) {
+    private fun updateHistTitle() {
+        histTitle.text = "📞  Call history ($histCount)   " + (if (histOpen) "▴" else "▾")
+        histBox.visibility = if (histOpen) View.VISIBLE else View.GONE
+        histPreview.visibility = if (histOpen) View.GONE else View.VISIBLE
+    }
+
+    private fun histLine(e: CallEntry, sims: Map<String, String>): String {
+        val dur = Data.fmtDur(e.duration)
+        var text = Data.typeLabel(e.type) + " • " + Data.fmtTime(e.date)
+        if (dur.isNotEmpty() && e.type != 3) text += " • $dur"
+        val sim = Data.simName(sims, e.sim)
+        if (sim.isNotEmpty()) text += " • $sim"
+        return text
+    }
+
+    private fun fillHistory(list: List<CallEntry>, sims: Map<String, String>) {
         histBox.removeAllViews()
+        histCount = list.size
         if (list.isEmpty()) {
+            histTitle.text = "📞  Call history"
+            histPreview.visibility = View.GONE
+            histBox.visibility = View.VISIBLE
             histBox.addView(hint("Koi call history nahi"))
             return
         }
+        histPreview.text = "Aakhri: " + histLine(list[0], sims)
+        updateHistTitle()
         for (e in list) {
-            val dur = Data.fmtDur(e.duration)
-            var text = Data.typeLabel(e.type) + " • " + Data.fmtTime(e.date)
-            if (dur.isNotEmpty() && e.type != 3) text += " • $dur"
+            val text = histLine(e, sims)
             val t = TextView(this)
             t.text = text
             t.textSize = 14f

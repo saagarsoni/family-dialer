@@ -177,8 +177,21 @@ fun searchField(ctx: Context, hintText: String, cb: () -> Unit): Pair<LinearLayo
     et.textSize = 15f
     et.setBackgroundColor(Color.TRANSPARENT)
     et.setPadding(ctx.dp(10), ctx.dp(11), ctx.dp(8), ctx.dp(11))
-    et.onChange(cb)
     box.addView(et, LinearLayout.LayoutParams(0, WRAP, 1f))
+
+    val x = TextView(ctx)
+    x.text = "✕"
+    x.textSize = 16f
+    x.setTextColor(GRAY)
+    x.gravity = Gravity.CENTER
+    x.visibility = View.INVISIBLE
+    x.setOnClickListener { et.setText("") }
+    box.addView(x, LinearLayout.LayoutParams(ctx.dp(36), ctx.dp(36)))
+
+    et.onChange {
+        x.visibility = if (et.text.isEmpty()) View.INVISIBLE else View.VISIBLE
+        cb()
+    }
     return Pair(box, et)
 }
 

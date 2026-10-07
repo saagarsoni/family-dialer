@@ -90,6 +90,7 @@ class MainActivity : Activity() {
     private lateinit var chipsHolder: FrameLayout
     private var contactsSel = "Sabhi"
     private var birthdays: List<Birthday> = emptyList()
+    private var sims: Map<String, String> = emptyMap()
     private var stamp = 0
     private var pendingDigit = ""
     private lateinit var recentsChips: Chips
@@ -101,7 +102,8 @@ class MainActivity : Activity() {
     private val permsWanted = arrayOf(
         Manifest.permission.READ_CONTACTS,
         Manifest.permission.READ_CALL_LOG,
-        Manifest.permission.CALL_PHONE
+        Manifest.permission.CALL_PHONE,
+        Manifest.permission.READ_PHONE_STATE
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -176,9 +178,11 @@ class MainActivity : Activity() {
             val cs = if (has(Manifest.permission.READ_CONTACTS)) Data.loadContacts(this) else emptyList()
             val rec = if (has(Manifest.permission.READ_CALL_LOG)) Data.loadRecents(this, cs) else emptyList()
             val bd = if (has(Manifest.permission.READ_CONTACTS)) Data.loadBirthdays(this) else emptyList()
+            val sm = Data.simLabels(this)
             runOnUiThread {
                 contacts = cs
                 birthdays = bd
+                sims = sm
                 recentEntries = rec
                 applyRecentsFilter()
                 applyContactFilter()
@@ -199,6 +203,8 @@ class MainActivity : Activity() {
         parts.add(Data.fmtTime(e.date))
         val dur = Data.fmtDur(e.duration)
         if (dur.isNotEmpty() && e.type != 3) parts.add(dur)
+        val sim = Data.simName(sims, e.sim)
+        if (sim.isNotEmpty()) parts.add(sim)
         val bad = e.type == 3 || e.type == 5
         return Row(title, parts.joinToString(" • "), e.number, e.name, if (bad) RED else GRAY)
     }
@@ -415,9 +421,6 @@ class MainActivity : Activity() {
 
         val sf = searchField(this, "Naam ya number se search karo") { applyRecentsFilter() }
         recentsSearch = sf.second
-        val slp = LinearLayout.LayoutParams(MATCH, WRAP)
-        slp.setMargins(dp(16), dp(8), dp(16), dp(6))
-        p.addView(sf.first, slp)
 
         recentsInfo = infoView()
         p.addView(recentsInfo, LinearLayout.LayoutParams(MATCH, WRAP))
@@ -432,6 +435,9 @@ class MainActivity : Activity() {
         }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
         p.addView(recentsChips.view, LinearLayout.LayoutParams(MATCH, WRAP))
+        val slp = LinearLayout.LayoutParams(MATCH, WRAP)
+        slp.setMargins(dp(16), dp(2), dp(16), dp(8))
+        p.addView(sf.first, slp)
         return p
     }
 
@@ -443,9 +449,6 @@ class MainActivity : Activity() {
 
         val sf = searchField(this, "Naam ya number se search karo") { applyContactFilter() }
         searchBox = sf.second
-        val slp = LinearLayout.LayoutParams(MATCH, WRAP)
-        slp.setMargins(dp(16), dp(8), dp(16), dp(6))
-        p.addView(sf.first, slp)
 
         contactsInfo = infoView()
         p.addView(contactsInfo, LinearLayout.LayoutParams(MATCH, WRAP))
@@ -460,6 +463,9 @@ class MainActivity : Activity() {
         }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
         p.addView(chipsHolder, LinearLayout.LayoutParams(MATCH, WRAP))
+        val slp = LinearLayout.LayoutParams(MATCH, WRAP)
+        slp.setMargins(dp(16), dp(2), dp(16), dp(8))
+        p.addView(sf.first, slp)
         return p
     }
 
