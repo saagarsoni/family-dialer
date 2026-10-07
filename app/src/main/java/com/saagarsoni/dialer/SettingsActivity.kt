@@ -194,6 +194,30 @@ class SettingsActivity : Activity() {
             }
         )
 
+        // fraud / block
+        add(section("🚫  Fraud aur Block"))
+        val held = Screening.isHeld(this)
+        add(
+            row(
+                "Call blocking: " + (if (held) "ON" else "OFF"),
+                if (held) "Chalu hai. Block kiye number ki call apne aap reject hogi, fraud number par alert aayega"
+                else "Band hai. Tap karke Sampark ko 'Caller ID & spam app' banao"
+            ) {
+                if (!held) Screening.request(this)
+            }
+        )
+        val flagged = Store.flags(this).values.sortedByDescending { it.ts }
+        for (f in flagged) {
+            val nm = Data.lookupName(this, f.number)
+            val tag = (if (f.label.isNotEmpty()) "⚠ " + f.label else "") +
+                (if (f.blocked) (if (f.label.isNotEmpty()) " • " else "") + "🚫 Blocked" else " • Sirf pehchaan")
+            add(row(if (nm != null) nm + "  (" + f.number + ")" else f.number, tag) {
+                Actions.flagDialog(this, f.number, nm) { render() }
+            })
+        }
+        add(row("＋ Number add karo", "Koi number haath se fraud / block list mein daalo") { addFlagDialog() })
+        add(row("Tip: Recents mein kisi call ko lamba dabao, seedha Fraud / Block ka option aayega", null, null))
+
         // birthdays
         add(section("🎂  Birthdays"))
         val on = Birthdays.enabled(this)
@@ -280,10 +304,29 @@ class SettingsActivity : Activity() {
         })
 
         add(section("ℹ️  About"))
-        add(row("Sampark v1.7", "Saagar ka apna dialer", null))
+        add(row("Sampark v1.8", "Saagar ka apna dialer", null))
     }
 
     // ---------- actions ----------
+
+    private fun addFlagDialog() {
+        val et = EditText(this)
+        et.themed("Number")
+        et.setSingleLine()
+        et.inputType = android.text.InputType.TYPE_CLASS_PHONE
+        val box = LinearLayout(this)
+        box.setPadding(dp(20), dp(8), dp(20), 0)
+        box.addView(et, LinearLayout.LayoutParams(MATCH, WRAP))
+        AlertDialog.Builder(this, dialogTheme())
+            .setTitle("Number add karo")
+            .setView(box)
+            .setPositiveButton("Aage") { _, _ ->
+                val n = Data.cleanNumber(et.text.toString())
+                Actions.flagDialog(this, n, null) { render() }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
 
     private fun newTagDialog() {
         val et = EditText(this)
@@ -335,7 +378,7 @@ class SettingsActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == DefaultDialer.REQ) {
+        if (requestCode == DefaultDialer.REQ || requestCode == Screening.REQ) {
             render()
             return
         }

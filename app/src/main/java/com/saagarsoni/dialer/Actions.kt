@@ -133,6 +133,58 @@ object Actions {
         showPostCall(act, n) {}
     }
 
+    fun flagDialog(act: Activity, number: String, name: String?, onDone: () -> Unit) {
+        val n = Data.cleanNumber(number)
+        if (Data.key10(n).length < 5) {
+            act.toast("Is number ko flag nahi kar sakte")
+            return
+        }
+        val cur = Store.flagOf(act, n)
+        val opts = ArrayList<String>()
+        opts.add("⚠ Fraud mark karo + Block karo")
+        opts.add("⚠ Fraud mark karo (block nahi, sirf pehchaan)")
+        opts.add("🚫 Sirf block karo")
+        if (cur != null) opts.add("✅ Flag / block hatao")
+        AlertDialog.Builder(act, dialogTheme())
+            .setTitle(name ?: n)
+            .setItems(opts.toTypedArray()) { _, i ->
+                var wantsBlock = false
+                when (i) {
+                    0 -> {
+                        Store.setFlag(act, n, "Fraud", true)
+                        wantsBlock = true
+                        act.toast("Fraud mark + block ho gaya")
+                    }
+                    1 -> {
+                        Store.setFlag(act, n, "Fraud", false)
+                        act.toast("Fraud mark ho gaya")
+                    }
+                    2 -> {
+                        Store.setFlag(act, n, "", true)
+                        wantsBlock = true
+                        act.toast("Block ho gaya")
+                    }
+                    else -> {
+                        Store.removeFlag(act, n)
+                        act.toast("Flag hata diya")
+                    }
+                }
+                onDone()
+                if (!Screening.isHeld(act)) {
+                    AlertDialog.Builder(act, dialogTheme())
+                        .setTitle("Call blocking chalu karo")
+                        .setMessage(
+                            (if (wantsBlock) "Block tabhi kaam karega" else "Fraud ki pehchaan call aane par tabhi dikhegi") +
+                                " jab Sampark ko 'Caller ID & spam app' bana do. Abhi karu?"
+                        )
+                        .setPositiveButton("Haan") { _, _ -> Screening.request(act) }
+                        .setNegativeButton("Baad mein", null)
+                        .show()
+                }
+            }
+            .show()
+    }
+
     fun postCallWanted(ctx: Context, number: String): Boolean {
         return when (Store.getInt(ctx, "postcall_mode", 0)) {
             1 -> Store.tagsOf(ctx, number).isNotEmpty()
@@ -168,6 +220,19 @@ object Actions {
         val lp = LinearLayout.LayoutParams(MATCH, WRAP)
         lp.topMargin = act.dp(12)
         box.addView(wa, lp)
+
+        if (Data.key10(number).length >= 5) {
+            val fr = TextView(act)
+            fr.text = "🚫  Fraud / Block"
+            fr.setTextColor(Color.WHITE)
+            fr.gravity = Gravity.CENTER
+            fr.setPadding(0, act.dp(10), 0, act.dp(10))
+            fr.background = roundBg(act, RED, 10)
+            fr.setOnClickListener { flagDialog(act, number, name) {} }
+            val flp = LinearLayout.LayoutParams(MATCH, WRAP)
+            flp.topMargin = act.dp(8)
+            box.addView(fr, flp)
+        }
 
         val dlg = AlertDialog.Builder(act, dialogTheme())
             .setTitle("Call khatam: " + (name ?: number))

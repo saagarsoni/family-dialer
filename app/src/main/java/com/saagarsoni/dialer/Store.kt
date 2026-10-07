@@ -16,6 +16,8 @@ data class Reminder(
 
 data class Fav(val number: String, val name: String)
 
+class Flag(val number: String, val label: String, val blocked: Boolean, val ts: Long)
+
 class TagEntry(val number: String, val name: String, val tags: List<String>)
 
 object Store {
@@ -253,6 +255,62 @@ object Store {
         sp(ctx).edit().putString("speed", o.toString()).apply()
     }
 
+    // ---------- fraud / block list ----------
+
+    fun flags(ctx: Context): LinkedHashMap<String, Flag> {
+        val out = LinkedHashMap<String, Flag>()
+        val raw = sp(ctx).getString("flags", null) ?: return out
+        try {
+            val o = JSONObject(raw)
+            val keys = o.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val e = o.getJSONObject(k)
+                out[k] = Flag(
+                    e.optString("number", ""),
+                    e.optString("label", ""),
+                    e.optBoolean("blocked", false),
+                    e.optLong("ts", 0L)
+                )
+            }
+        } catch (e: Exception) {
+        }
+        return out
+    }
+
+    fun flagOf(ctx: Context, number: String): Flag? {
+        val k = Data.key10(number)
+        if (k.length < 5) return null
+        return flags(ctx)[k]
+    }
+
+    private fun saveFlags(ctx: Context, m: Map<String, Flag>) {
+        val o = JSONObject()
+        for ((k, v) in m) {
+            val e = JSONObject()
+            e.put("number", v.number)
+            e.put("label", v.label)
+            e.put("blocked", v.blocked)
+            e.put("ts", v.ts)
+            o.put(k, e)
+        }
+        sp(ctx).edit().putString("flags", o.toString()).apply()
+    }
+
+    fun setFlag(ctx: Context, number: String, label: String, blocked: Boolean) {
+        val k = Data.key10(number)
+        if (k.length < 5) return
+        val m = flags(ctx)
+        m[k] = Flag(Data.cleanNumber(number), label, blocked, System.currentTimeMillis())
+        saveFlags(ctx, m)
+    }
+
+    fun removeFlag(ctx: Context, number: String) {
+        val m = flags(ctx)
+        m.remove(Data.key10(number))
+        saveFlags(ctx, m)
+    }
+
     // ---------- reminders ----------
 
     fun reminders(ctx: Context): List<Reminder> {
@@ -309,7 +367,7 @@ object Store {
     // ---------- backup / restore ----------
 
     private val BACKUP_KEYS = arrayOf(
-        "notes_", "favs", "tagmap", "taglist", "speed", "theme_mode", "accent", "bday_on"
+        "notes_", "favs", "tagmap", "taglist", "speed", "theme_mode", "accent", "bday_on", "flags", "postcall_mode"
     )
 
     private fun allowed(key: String): Boolean = BACKUP_KEYS.any { key.startsWith(it) }

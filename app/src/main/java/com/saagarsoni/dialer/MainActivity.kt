@@ -91,6 +91,7 @@ class MainActivity : Activity() {
     private var contactsSel = "Sabhi"
     private var birthdays: List<Birthday> = emptyList()
     private var sims: Map<String, String> = emptyMap()
+    private var flagMap: Map<String, Flag> = emptyMap()
     private var stamp = 0
     private var pendingDigit = ""
     private lateinit var recentsChips: Chips
@@ -124,6 +125,7 @@ class MainActivity : Activity() {
             return
         }
         buildContactChips()
+        flagMap = Store.flags(this)
         if (has(Manifest.permission.READ_CONTACTS) || has(Manifest.permission.READ_CALL_LOG)) {
             loadData()
         } else {
@@ -205,7 +207,14 @@ class MainActivity : Activity() {
         if (dur.isNotEmpty() && e.type != 3) parts.add(dur)
         val sim = Data.simName(sims, e.sim)
         if (sim.isNotEmpty()) parts.add(sim)
-        val bad = e.type == 3 || e.type == 5
+        val fl = flagMap[Data.key10(e.number)]
+        if (fl != null) {
+            parts.add(
+                (if (fl.label.isNotEmpty()) "⚠ " + fl.label else "") +
+                    (if (fl.blocked) (if (fl.label.isNotEmpty()) " • " else "") + "🚫 Blocked" else "")
+            )
+        }
+        val bad = e.type == 3 || e.type == 5 || fl != null
         return Row(title, parts.joinToString(" • "), e.number, e.name, if (bad) RED else GRAY)
     }
 
@@ -432,6 +441,16 @@ class MainActivity : Activity() {
         list.setOnItemClickListener { _, _, pos, _ ->
             val r = recentsAdapter.getItem(pos)
             if (r.number.isNotEmpty()) Actions.openDetail(this, r.number, r.name)
+        }
+        list.setOnItemLongClickListener { _, _, pos, _ ->
+            val r = recentsAdapter.getItem(pos)
+            if (r.number.isNotEmpty()) {
+                Actions.flagDialog(this, r.number, r.name) {
+                    flagMap = Store.flags(this)
+                    applyRecentsFilter()
+                }
+            }
+            true
         }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
         p.addView(recentsChips.view, LinearLayout.LayoutParams(MATCH, WRAP))

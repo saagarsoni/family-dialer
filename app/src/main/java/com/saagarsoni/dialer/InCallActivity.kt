@@ -369,7 +369,10 @@ class InCallActivity : Activity() {
 
         val shown = t.name ?: (if (t.number.isEmpty()) "Unknown" else t.number)
         nameView.text = shown
-        numView.text = if (t.name != null) t.number else ""
+        val fl = Store.flagOf(this, t.number)
+        val flagTxt = if (fl == null) "" else (if (fl.label.isNotEmpty()) "⚠ " + fl.label.uppercase() else "🚫 Block list")
+        val baseNum = if (t.name != null) t.number else ""
+        numView.text = if (flagTxt.isEmpty()) baseNum else if (baseNum.isEmpty()) flagTxt else "$baseNum  •  $flagTxt"
         avatar.text = (t.name?.trim()?.firstOrNull() ?: '#').uppercaseChar().toString()
         avatar.background = circleBg(avatarColor(shown))
 

@@ -30,6 +30,7 @@ class DetailActivity : Activity() {
     private lateinit var recTitle: TextView
     private lateinit var recBox: LinearLayout
     private var recOpen = false
+    private lateinit var flagView: TextView
     private lateinit var histTitle: TextView
     private lateinit var histPreview: TextView
     private var histOpen = false
@@ -164,6 +165,17 @@ class DetailActivity : Activity() {
             col.addView(numView, LinearLayout.LayoutParams(MATCH, WRAP))
         }
 
+        flagView = TextView(this)
+        flagView.textSize = 14f
+        flagView.setTextColor(Color.WHITE)
+        flagView.gravity = Gravity.CENTER
+        flagView.setPadding(dp(14), dp(8), dp(14), dp(8))
+        flagView.background = roundBg(this, RED, 10)
+        flagView.visibility = View.GONE
+        val fvp = LinearLayout.LayoutParams(MATCH, WRAP)
+        fvp.topMargin = dp(12)
+        col.addView(flagView, fvp)
+
         if (number.isNotEmpty()) {
             val row1 = LinearLayout(this)
             row1.orientation = LinearLayout.HORIZONTAL
@@ -184,6 +196,18 @@ class DetailActivity : Activity() {
                 row2.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
             }
             col.addView(row2, LinearLayout.LayoutParams(MATCH, WRAP))
+
+            val row3 = LinearLayout(this)
+            row3.orientation = LinearLayout.HORIZONTAL
+            row3.addView(
+                actionBtn("🚫", "Fraud / Block") {
+                    Actions.flagDialog(this, number, name) { refreshFlag() }
+                },
+                LinearLayout.LayoutParams(0, WRAP, 1f)
+            )
+            row3.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+            row3.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+            col.addView(row3, LinearLayout.LayoutParams(MATCH, WRAP))
         }
 
         // tags
@@ -438,7 +462,19 @@ class DetailActivity : Activity() {
         refreshRecordings()
     }
 
+    private fun refreshFlag() {
+        val f = if (number.isEmpty()) null else Store.flagOf(this, number)
+        if (f == null) {
+            flagView.visibility = View.GONE
+            return
+        }
+        val label = if (f.label.isEmpty()) "Block list" else "⚠ " + f.label
+        flagView.text = label + (if (f.blocked) "  •  🚫 Blocked" else "  •  Sirf pehchaan")
+        flagView.visibility = View.VISIBLE
+    }
+
     private fun refresh() {
+        refreshFlag()
         updateStar()
         refreshTags()
         refreshRecordings()
