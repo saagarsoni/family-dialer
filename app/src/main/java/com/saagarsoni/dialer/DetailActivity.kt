@@ -205,7 +205,10 @@ class DetailActivity : Activity() {
                 },
                 LinearLayout.LayoutParams(0, WRAP, 1f)
             )
-            row3.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+            row3.addView(
+                actionBtn("📹", "Video") { Actions.videoMenu(this, number) },
+                LinearLayout.LayoutParams(0, WRAP, 1f)
+            )
             row3.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
             col.addView(row3, LinearLayout.LayoutParams(MATCH, WRAP))
         }

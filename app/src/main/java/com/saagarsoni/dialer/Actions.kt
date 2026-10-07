@@ -63,6 +63,86 @@ object Actions {
         safeStart(act, Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + Data.waNumber(number))))
     }
 
+    // ---------- video / WhatsApp calls ----------
+
+    fun videoMenu(act: Activity, number: String) {
+        val opts = arrayOf(
+            "🟢  WhatsApp video call",
+            "🟢  WhatsApp voice call",
+            "📹  Carrier video call (Jio / Airtel)"
+        )
+        AlertDialog.Builder(act, dialogTheme())
+            .setTitle("Video / WhatsApp call")
+            .setItems(opts) { _, i ->
+                when (i) {
+                    0 -> whatsappCall(act, number, true)
+                    1 -> whatsappCall(act, number, false)
+                    else -> carrierVideo(act, number)
+                }
+            }
+            .show()
+    }
+
+    // Contact WhatsApp se synced ho to seedha call lagta hai, warna chat khulti hai.
+    fun whatsappCall(act: Activity, number: String, video: Boolean) {
+        val key = Data.key10(number)
+        if (key.length < 7) {
+            act.toast("Number sahi nahi hai")
+            return
+        }
+        val kinds = arrayOf(
+            arrayOf("com.whatsapp", if (video) "vnd.android.cursor.item/vnd.com.whatsapp.video.call" else "vnd.android.cursor.item/vnd.com.whatsapp.voip.call"),
+            arrayOf("com.whatsapp.w4b", if (video) "vnd.android.cursor.item/vnd.com.whatsapp.w4b.video.call" else "vnd.android.cursor.item/vnd.com.whatsapp.w4b.voip.call")
+        )
+        for (k in kinds) {
+            var id = -1L
+            try {
+                act.contentResolver.query(
+                    ContactsContract.Data.CONTENT_URI,
+                    arrayOf(ContactsContract.Data._ID),
+                    ContactsContract.Data.MIMETYPE + "=? AND " + ContactsContract.Data.DATA1 + " LIKE ?",
+                    arrayOf(k[1], "%" + key + "@s.whatsapp.net"),
+                    null
+                )?.use {
+                    if (it.moveToFirst()) id = it.getLong(0)
+                }
+            } catch (e: Exception) {
+            }
+            if (id >= 0L) {
+                try {
+                    val i = Intent(Intent.ACTION_VIEW)
+                    i.setDataAndType(Uri.parse("content://com.android.contacts/data/$id"), k[1])
+                    i.setPackage(k[0])
+                    act.startActivity(i)
+                    return
+                } catch (e: Exception) {
+                }
+            }
+        }
+        act.toast("Ye contact WhatsApp se synced nahi hai, chat khol raha hu")
+        whatsapp(act, number)
+    }
+
+    // Carrier ka asli video call. Phone aur SIM dono support karte hon tabhi video lagega.
+    fun carrierVideo(act: Activity, number: String) {
+        val n = Data.cleanNumber(number)
+        if (n.isEmpty()) return
+        if (act.checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            act.requestPermissions(arrayOf(Manifest.permission.CALL_PHONE), 2)
+            act.toast("Phone permission allow karo, phir dobara tap karo")
+            return
+        }
+        try {
+            val i = Intent(Intent.ACTION_CALL, Uri.fromParts("tel", n, null))
+            i.putExtra(android.telecom.TelecomManager.EXTRA_START_CALL_WITH_VIDEO_STATE, 3)
+            act.startActivity(i)
+            pendingNumber = n
+            pendingAt = System.currentTimeMillis()
+        } catch (e: Exception) {
+            act.toast("Video call nahi lag paya")
+        }
+    }
+
     fun copy(act: Activity, number: String) {
         val cm = act.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("number", number))
