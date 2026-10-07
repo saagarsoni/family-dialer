@@ -2,11 +2,39 @@ name: Build APK
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Apply files from updates folder
+        run: |
+          if [ -d updates ]; then
+            moved=0
+            for f in updates/*; do
+              [ -f "$f" ] || continue
+              n=$(basename "$f")
+              case "$n" in
+                *.kt) d="app/src/main/java/com/saagarsoni/dialer" ;;
+                AndroidManifest.xml) d="app/src/main" ;;
+                build.gradle) d="app" ;;
+                *) echo "Skip unknown file: $n"; continue ;;
+              esac
+              mkdir -p "$d"
+              mv -f "$f" "$d/$n"
+              echo "Placed $n -> $d"
+              moved=$((moved+1))
+            done
+            if [ "$moved" -gt 0 ]; then
+              git config user.name "github-actions"
+              git config user.email "github-actions@users.noreply.github.com"
+              git add -A
+              git commit -m "Apply files from updates folder"
+              git push || echo "push failed, build continues"
+            fi
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
