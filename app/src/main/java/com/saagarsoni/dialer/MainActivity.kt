@@ -430,6 +430,9 @@ class MainActivity : Activity() {
 
         val sf = searchField(this, "Naam ya number se search karo") { applyRecentsFilter() }
         recentsSearch = sf.second
+        val topLp = LinearLayout.LayoutParams(MATCH, WRAP)
+        topLp.setMargins(dp(16), dp(8), dp(16), dp(4))
+        p.addView(sf.first, topLp)
 
         recentsInfo = infoView()
         p.addView(recentsInfo, LinearLayout.LayoutParams(MATCH, WRAP))
@@ -453,10 +456,7 @@ class MainActivity : Activity() {
             true
         }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
-        p.addView(recentsChips.view, LinearLayout.LayoutParams(MATCH, WRAP))
-        val slp = LinearLayout.LayoutParams(MATCH, WRAP)
-        slp.setMargins(dp(16), dp(2), dp(16), dp(8))
-        p.addView(sf.first, slp)
+        p.addView(bottomBar(recentsChips.view, recentsSearch), LinearLayout.LayoutParams(MATCH, WRAP))
         return p
     }
 
@@ -468,6 +468,9 @@ class MainActivity : Activity() {
 
         val sf = searchField(this, "Naam ya number se search karo") { applyContactFilter() }
         searchBox = sf.second
+        val topLp = LinearLayout.LayoutParams(MATCH, WRAP)
+        topLp.setMargins(dp(16), dp(8), dp(16), dp(4))
+        p.addView(sf.first, topLp)
 
         contactsInfo = infoView()
         p.addView(contactsInfo, LinearLayout.LayoutParams(MATCH, WRAP))
@@ -481,11 +484,32 @@ class MainActivity : Activity() {
             if (r.number.isNotEmpty()) Actions.openDetail(this, r.number, r.name)
         }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
-        p.addView(chipsHolder, LinearLayout.LayoutParams(MATCH, WRAP))
-        val slp = LinearLayout.LayoutParams(MATCH, WRAP)
-        slp.setMargins(dp(16), dp(2), dp(16), dp(8))
-        p.addView(sf.first, slp)
+        p.addView(bottomBar(chipsHolder, searchBox), LinearLayout.LayoutParams(MATCH, WRAP))
         return p
+    }
+
+    // neeche ki patti: [🔍 keyboard button] + chips
+    private fun bottomBar(chips: View, box: EditText): LinearLayout {
+        val bar = LinearLayout(this)
+        bar.orientation = LinearLayout.HORIZONTAL
+        bar.gravity = Gravity.CENTER_VERTICAL
+
+        val kb = TextView(this)
+        kb.text = "🔍"
+        kb.textSize = 20f
+        kb.gravity = Gravity.CENTER
+        kb.background = circleBg(GREEN)
+        kb.setOnClickListener {
+            box.requestFocus()
+            box.setSelection(box.text.length)
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(box, InputMethodManager.SHOW_IMPLICIT)
+        }
+        val klp = LinearLayout.LayoutParams(dp(44), dp(44))
+        klp.leftMargin = dp(12)
+        bar.addView(kb, klp)
+        bar.addView(chips, LinearLayout.LayoutParams(0, WRAP, 1f))
+        return bar
     }
 
     private fun buildContactChips() {
