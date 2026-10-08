@@ -191,9 +191,9 @@ class DetailActivity : Activity() {
             row2.addView(actionBtn("⏰", "Reminder") { Actions.askReminder(this, number, name, "") }, LinearLayout.LayoutParams(0, WRAP, 1f))
             row2.addView(actionBtn("📋", "Copy") { Actions.copy(this, number) }, LinearLayout.LayoutParams(0, WRAP, 1f))
             if (name == null) {
-                row2.addView(actionBtn("➕", "Save") { Actions.saveContact(this, number) }, LinearLayout.LayoutParams(0, WRAP, 1f))
+                row2.addView(actionBtn("➕", "Save") { openEdit() }, LinearLayout.LayoutParams(0, WRAP, 1f))
             } else {
-                row2.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+                row2.addView(actionBtn("✎", "Edit") { openEdit() }, LinearLayout.LayoutParams(0, WRAP, 1f))
             }
             col.addView(row2, LinearLayout.LayoutParams(MATCH, WRAP))
 
@@ -474,6 +474,23 @@ class DetailActivity : Activity() {
         val label = if (f.label.isEmpty()) "Block list" else "⚠ " + f.label
         flagView.text = label + (if (f.blocked) "  •  🚫 Blocked" else "  •  Sirf pehchaan")
         flagView.visibility = View.VISIBLE
+    }
+
+    private fun openEdit() {
+        val i = android.content.Intent(this, ContactEditActivity::class.java)
+        i.putExtra("number", number)
+        i.putExtra("name", name ?: "")
+        i.putExtra("edit", name != null)
+        startActivityForResult(i, 62)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 62 && resultCode == RESULT_OK && data != null) {
+            intent.putExtra("number", data.getStringExtra("number") ?: number)
+            intent.putExtra("name", data.getStringExtra("name") ?: "")
+            recreate()
+        }
     }
 
     private fun refresh() {

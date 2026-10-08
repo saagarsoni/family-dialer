@@ -150,10 +150,42 @@ object Actions {
     }
 
     fun saveContact(act: Activity, number: String) {
-        val i = Intent(ContactsContract.Intents.Insert.ACTION)
-        i.type = ContactsContract.RawContacts.CONTENT_TYPE
-        i.putExtra(ContactsContract.Intents.Insert.PHONE, number)
-        safeStart(act, i)
+        val i = Intent(act, ContactEditActivity::class.java)
+        i.putExtra("number", number)
+        act.startActivity(i)
+    }
+
+    fun editContact(act: Activity, number: String, name: String?) {
+        val i = Intent(act, ContactEditActivity::class.java)
+        i.putExtra("number", number)
+        i.putExtra("name", name ?: "")
+        i.putExtra("edit", name != null)
+        act.startActivity(i)
+    }
+
+    // Recents / list mein lamba dabane par menu
+    fun rowMenu(act: Activity, number: String, name: String?, onChange: () -> Unit) {
+        val opts = ArrayList<String>()
+        val acts = ArrayList<() -> Unit>()
+        opts.add("📞  Call")
+        acts.add { call(act, number) }
+        opts.add("💬  SMS")
+        acts.add { sms(act, number) }
+        if (name == null) {
+            opts.add("➕  Contact save karo")
+            acts.add { saveContact(act, number) }
+        } else {
+            opts.add("✎  Contact edit karo")
+            acts.add { editContact(act, number, name) }
+        }
+        opts.add("📋  Number copy karo")
+        acts.add { copy(act, number) }
+        opts.add("🚫  Fraud / Block")
+        acts.add { flagDialog(act, number, name) { onChange() } }
+        AlertDialog.Builder(act, dialogTheme())
+            .setTitle(name ?: number)
+            .setItems(opts.toTypedArray()) { _, i -> acts[i]() }
+            .show()
     }
 
     fun pickContact(act: Activity, req: Int) {
@@ -300,6 +332,19 @@ object Actions {
         val lp = LinearLayout.LayoutParams(MATCH, WRAP)
         lp.topMargin = act.dp(12)
         box.addView(wa, lp)
+
+        if (name == null && Data.key10(number).length >= 5) {
+            val sv = TextView(act)
+            sv.text = "➕  Contact save karo"
+            sv.setTextColor(Color.WHITE)
+            sv.gravity = Gravity.CENTER
+            sv.setPadding(0, act.dp(10), 0, act.dp(10))
+            sv.background = roundBg(act, GREEN, 10)
+            sv.setOnClickListener { saveContact(act, number) }
+            val svlp = LinearLayout.LayoutParams(MATCH, WRAP)
+            svlp.topMargin = act.dp(8)
+            box.addView(sv, svlp)
+        }
 
         if (Data.key10(number).length >= 5) {
             val fr = TextView(act)

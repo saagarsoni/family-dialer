@@ -448,7 +448,7 @@ class MainActivity : Activity() {
         list.setOnItemLongClickListener { _, _, pos, _ ->
             val r = recentsAdapter.getItem(pos)
             if (r.number.isNotEmpty()) {
-                Actions.flagDialog(this, r.number, r.name) {
+                Actions.rowMenu(this, r.number, r.name) {
                     flagMap = Store.flags(this)
                     applyRecentsFilter()
                 }
@@ -484,12 +484,12 @@ class MainActivity : Activity() {
             if (r.number.isNotEmpty()) Actions.openDetail(this, r.number, r.name)
         }
         p.addView(list, LinearLayout.LayoutParams(MATCH, 0, 1f))
-        p.addView(bottomBar(chipsHolder, searchBox), LinearLayout.LayoutParams(MATCH, WRAP))
+        p.addView(bottomBar(chipsHolder, searchBox, true), LinearLayout.LayoutParams(MATCH, WRAP))
         return p
     }
 
     // neeche ki patti: [🔍 keyboard button] + chips
-    private fun bottomBar(chips: View, box: EditText): LinearLayout {
+    private fun bottomBar(chips: View, box: EditText, withAdd: Boolean = false): LinearLayout {
         val bar = LinearLayout(this)
         bar.orientation = LinearLayout.HORIZONTAL
         bar.gravity = Gravity.CENTER_VERTICAL
@@ -509,6 +509,18 @@ class MainActivity : Activity() {
         klp.leftMargin = dp(12)
         bar.addView(kb, klp)
         bar.addView(chips, LinearLayout.LayoutParams(0, WRAP, 1f))
+        if (withAdd) {
+            val add = TextView(this)
+            add.text = "＋"
+            add.textSize = 24f
+            add.setTextColor(Color.WHITE)
+            add.gravity = Gravity.CENTER
+            add.background = circleBg(GREEN)
+            add.setOnClickListener { startActivity(Intent(this, ContactEditActivity::class.java)) }
+            val alp = LinearLayout.LayoutParams(dp(44), dp(44))
+            alp.rightMargin = dp(12)
+            bar.addView(add, alp)
+        }
         return bar
     }
 
