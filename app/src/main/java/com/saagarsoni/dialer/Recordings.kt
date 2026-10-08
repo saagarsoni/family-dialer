@@ -5,6 +5,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.CallLog
 import android.os.Build
 import android.provider.MediaStore
 import java.text.SimpleDateFormat
@@ -29,6 +30,7 @@ object Recordings {
         val out = ArrayList<Rec>()
         val key = Data.key10(number)
         if (key.isEmpty()) return out
+        val windows = callWindows(ctx, key)
         val fmt = SimpleDateFormat("yyMMddHHmmss", Locale.US)
         try {
             val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -41,8 +43,10 @@ object Recordings {
                     MediaStore.Audio.Media.DURATION
                 ),
                 MediaStore.Audio.Media.DISPLAY_NAME + " LIKE ? OR " +
-                    MediaStore.Audio.Media.DATA + " LIKE ?",
-                arrayOf("Call recording%", "%/Recordings/Call/%"),
+                    MediaStore.Audio.Media.DATA + " LIKE ? OR " +
+                    MediaStore.Audio.Media.DATA + " LIKE ? OR " +
+                    MediaStore.Audio.Media.DISPLAY_NAME + " LIKE ?",
+                arrayOf("%call%record%", "%/Recordings/Call/%", "%/Call/%", "%record%call%"),
                 MediaStore.Audio.Media.DATE_ADDED + " DESC"
             )
             cursor?.use {
@@ -58,6 +62,7 @@ object Recordings {
                     if (stem.startsWith("Call recording", true)) {
                         stem = stem.substring("Call recording".length).trim()
                     }
+                    stem = stem.trimStart('_', '-', ' ')
 
                     var ts = added
                     var who = stem
@@ -71,9 +76,19 @@ object Recordings {
                         }
                     }
 
-                    val byNum = Data.digitsOf(who).length >= 7 && Data.key10(who) == key
-                    val byName = name != null && who.equals(name.trim(), true)
-                    if (byNum || byName) {
+                    val wd = Data.digitsOf(who)
+                    val byNum = wd.length >= 7 && (Data.key10(who) == key ||
+                        (wd.length < 10 && key.endsWith(wd)))
+                    val byName = name != null && who.isNotEmpty() && who.equals(name.trim(), true)
+                    // naam/number se na mile (unsaved, private etc.) toh call log ke time se milao
+                    var byTime = false
+                    for (w in windows) {
+                        if (ts >= w[0] - 90_000L && ts <= w[1] + 180_000L) {
+                            byTime = true
+                            break
+                        }
+                    }
+                    if (byNum || byName || byTime) {
                         out.add(Rec(ContentUris.withAppendedId(uri, id), who, ts, dur))
                     }
                 }
@@ -81,5 +96,29 @@ object Recordings {
         } catch (e: Exception) {
         }
         return out.sortedByDescending { it.ts }
+    }
+
+    // is number ke call log entries: [start, end] windows
+    private fun callWindows(ctx: Context, key: String): List<LongArray> {
+        val res = ArrayList<LongArray>()
+        if (ctx.checkSelfPermission(Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) return res
+        try {
+            val c = ctx.contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.DATE, CallLog.Calls.DURATION),
+                null, null, CallLog.Calls.DATE + " DESC LIMIT 1500"
+            )
+            c?.use {
+                while (it.moveToNext()) {
+                    val n = it.getString(0) ?: continue
+                    if (Data.key10(n) != key) continue
+                    val st = it.getLong(1)
+                    val du = it.getLong(2) * 1000L
+                    res.add(longArrayOf(st, st + du))
+                }
+            }
+        } catch (e: Exception) {
+        }
+        return res
     }
 }

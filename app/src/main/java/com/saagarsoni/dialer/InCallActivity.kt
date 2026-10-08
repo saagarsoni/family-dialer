@@ -57,6 +57,7 @@ class InCallActivity : Activity() {
     private lateinit var spkCtrl: Ctrl
     private lateinit var holdCtrl: Ctrl
     private lateinit var swapCtrl: Ctrl
+    private lateinit var mergeCtrl: Ctrl
 
     private val listenerRef: () -> Unit = { render() }
 
@@ -229,6 +230,24 @@ class InCallActivity : Activity() {
             }
         }
 
+        val addCtrl = ctrl("➕", "Add call") {
+            val i = android.content.Intent(this, MainActivity::class.java)
+            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(i)
+        }
+        mergeCtrl = ctrl("🔀", "Merge") {
+            val t = CallManager.primary()
+            if (t != null) {
+                val o = CallManager.otherHolding(t)
+                val canMerge = (t.call.details.callCapabilities and Call.Details.CAPABILITY_MERGE_CONFERENCE) != 0
+                try {
+                    if (canMerge) t.call.mergeConference()
+                    else if (o != null) t.call.conference(o.call)
+                } catch (e: Exception) {
+                }
+            }
+        }
+
         val row1 = LinearLayout(this)
         row1.orientation = LinearLayout.HORIZONTAL
         row1.addView(muteCtrl.box, LinearLayout.LayoutParams(0, WRAP, 1f))
@@ -242,6 +261,12 @@ class InCallActivity : Activity() {
         row2.addView(noteCtrl.box, LinearLayout.LayoutParams(0, WRAP, 1f))
         row2.addView(swapCtrl.box, LinearLayout.LayoutParams(0, WRAP, 1f))
         gridBox.addView(row2, LinearLayout.LayoutParams(MATCH, WRAP))
+        val row3 = LinearLayout(this)
+        row3.orientation = LinearLayout.HORIZONTAL
+        row3.addView(addCtrl.box, LinearLayout.LayoutParams(0, WRAP, 1f))
+        row3.addView(mergeCtrl.box, LinearLayout.LayoutParams(0, WRAP, 1f))
+        row3.addView(View(this), LinearLayout.LayoutParams(0, WRAP, 1f))
+        gridBox.addView(row3, LinearLayout.LayoutParams(MATCH, WRAP))
         root.addView(gridBox, LinearLayout.LayoutParams(MATCH, WRAP))
 
         // keypad
@@ -403,6 +428,8 @@ class InCallActivity : Activity() {
         val canHold = (call.details.callCapabilities and Call.Details.CAPABILITY_HOLD) != 0
         holdCtrl.box.alpha = if (canHold || state == Call.STATE_HOLDING) 1f else 0.35f
         swapCtrl.box.visibility = if (CallManager.otherHolding(t) != null) View.VISIBLE else View.INVISIBLE
+        val canMergeNow = (call.details.callCapabilities and Call.Details.CAPABILITY_MERGE_CONFERENCE) != 0
+        mergeCtrl.box.visibility = if (CallManager.otherHolding(t) != null || canMergeNow) View.VISIBLE else View.INVISIBLE
 
         if (state == Call.STATE_SELECT_PHONE_ACCOUNT) askAccount(call)
         updateProximity(state, speaker)
