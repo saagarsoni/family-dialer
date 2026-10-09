@@ -58,6 +58,7 @@ class InCallActivity : Activity() {
     private lateinit var holdCtrl: Ctrl
     private lateinit var swapCtrl: Ctrl
     private lateinit var mergeCtrl: Ctrl
+    private lateinit var partBox: LinearLayout
 
     private val listenerRef: () -> Unit = { render() }
 
@@ -112,21 +113,21 @@ class InCallActivity : Activity() {
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
         box.gravity = Gravity.CENTER_HORIZONTAL
-        box.setPadding(0, dp(8), 0, dp(8))
+        box.setPadding(0, dp(4), 0, dp(4))
         box.setOnClickListener { onClick() }
 
         val icon = TextView(this)
         icon.text = emoji
         icon.textSize = 22f
         icon.gravity = Gravity.CENTER
-        box.addView(icon, LinearLayout.LayoutParams(dp(60), dp(60)))
+        box.addView(icon, LinearLayout.LayoutParams(dp(54), dp(54)))
 
         val l = TextView(this)
         l.text = label
         l.textSize = 12f
         l.setTextColor(CALL_MUTED)
         l.gravity = Gravity.CENTER
-        l.setPadding(0, dp(6), 0, 0)
+        l.setPadding(0, dp(4), 0, 0)
         box.addView(l, LinearLayout.LayoutParams(WRAP, WRAP))
 
         val c = Ctrl(box, icon)
@@ -163,7 +164,7 @@ class InCallActivity : Activity() {
         root.orientation = LinearLayout.VERTICAL
         root.gravity = Gravity.CENTER_HORIZONTAL
         root.setBackgroundColor(CALL_BG)
-        root.setPadding(dp(24), dp(32), dp(24), dp(28))
+        root.setPadding(dp(24), dp(20), dp(24), dp(20))
 
         stateView = TextView(this)
         stateView.textSize = 15f
@@ -177,7 +178,7 @@ class InCallActivity : Activity() {
         avatar.textSize = 40f
         avatar.typeface = Typeface.DEFAULT_BOLD
         val alp = LinearLayout.LayoutParams(dp(110), dp(110))
-        alp.topMargin = dp(28)
+        alp.topMargin = dp(16)
         root.addView(avatar, alp)
 
         nameView = TextView(this)
@@ -193,6 +194,13 @@ class InCallActivity : Activity() {
         numView.setTextColor(CALL_MUTED)
         numView.gravity = Gravity.CENTER
         root.addView(numView, LinearLayout.LayoutParams(MATCH, WRAP))
+
+        partBox = LinearLayout(this)
+        partBox.orientation = LinearLayout.VERTICAL
+        partBox.visibility = View.GONE
+        val plp = LinearLayout.LayoutParams(MATCH, WRAP)
+        plp.topMargin = dp(10)
+        root.addView(partBox, plp)
 
         root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
 
@@ -348,10 +356,70 @@ class InCallActivity : Activity() {
         }
         val elp = LinearLayout.LayoutParams(dp(220), dp(60))
         elp.gravity = Gravity.CENTER_HORIZONTAL
-        elp.topMargin = dp(20)
+        elp.topMargin = dp(14)
         root.addView(endBtn, elp)
 
-        setContentView(root)
+        val sv = android.widget.ScrollView(this)
+        sv.isFillViewport = true
+        sv.setBackgroundColor(CALL_BG)
+        sv.addView(root, android.view.ViewGroup.LayoutParams(MATCH, MATCH))
+        setContentView(sv)
+    }
+
+    private fun fillParticipants(conf: Call) {
+        partBox.removeAllViews()
+        val kids = conf.children
+        for (k in kids) {
+            val tk = CallManager.trackedFor(k)
+            val h = k.details.handle
+            val num = tk?.number ?: (if (h != null) android.net.Uri.decode(h.schemeSpecificPart ?: "") else "")
+            val nm = tk?.name ?: (if (num.isEmpty()) "Unknown" else num)
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.gravity = Gravity.CENTER_VERTICAL
+            row.setPadding(dp(12), dp(6), dp(8), dp(6))
+            row.background = roundBg(this, CALL_BTN, 14)
+
+            val tv = TextView(this)
+            tv.text = "👤  " + nm + (if (tk?.name != null && num.isNotEmpty()) "\n      " + num else "")
+            tv.textSize = 15f
+            tv.setTextColor(Color.WHITE)
+            row.addView(tv, LinearLayout.LayoutParams(0, WRAP, 1f))
+
+            val canSplit = (k.details.callCapabilities and Call.Details.CAPABILITY_SEPARATE_FROM_CONFERENCE) != 0
+            if (canSplit && kids.size > 2) {
+                val sp = TextView(this)
+                sp.text = "Alag"
+                sp.textSize = 13f
+                sp.setTextColor(CALL_MUTED)
+                sp.setPadding(dp(10), dp(8), dp(10), dp(8))
+                sp.setOnClickListener {
+                    try {
+                        k.splitFromConference()
+                    } catch (e: Exception) {
+                    }
+                }
+                row.addView(sp, LinearLayout.LayoutParams(WRAP, WRAP))
+            }
+
+            val x = TextView(this)
+            x.text = "✕"
+            x.textSize = 16f
+            x.setTextColor(Color.WHITE)
+            x.gravity = Gravity.CENTER
+            x.background = circleBg(CALL_RED)
+            x.setOnClickListener {
+                try {
+                    k.disconnect()
+                } catch (e: Exception) {
+                }
+            }
+            row.addView(x, LinearLayout.LayoutParams(dp(36), dp(36)))
+
+            val lp = LinearLayout.LayoutParams(MATCH, WRAP)
+            lp.topMargin = dp(6)
+            partBox.addView(row, lp)
+        }
     }
 
     // ---------- behaviour ----------
@@ -392,13 +460,22 @@ class InCallActivity : Activity() {
         val call = t.call
         val state = call.state
 
-        val shown = t.name ?: (if (t.number.isEmpty()) "Unknown" else t.number)
+        val kidCount = call.children.size
+        val isConf = kidCount > 0
+        val shown = if (isConf) "Conference call" else (t.name ?: (if (t.number.isEmpty()) "Unknown" else t.number))
         nameView.text = shown
+        if (isConf) {
+            fillParticipants(call)
+            partBox.visibility = if (keypadOpen) View.GONE else View.VISIBLE
+        } else {
+            partBox.visibility = View.GONE
+        }
         val fl = Store.flagOf(this, t.number)
         val flagTxt = if (fl == null) "" else (if (fl.label.isNotEmpty()) "⚠ " + fl.label.uppercase() else "🚫 Block list")
         val baseNum = if (t.name != null) t.number else ""
         numView.text = if (flagTxt.isEmpty()) baseNum else if (baseNum.isEmpty()) flagTxt else "$baseNum  •  $flagTxt"
-        avatar.text = (t.name?.trim()?.firstOrNull() ?: '#').uppercaseChar().toString()
+        if (isConf) numView.text = "$kidCount log call mein"
+        avatar.text = if (isConf) "👥" else (t.name?.trim()?.firstOrNull() ?: '#').uppercaseChar().toString()
         avatar.background = circleBg(avatarColor(shown))
 
         val ringing = state == Call.STATE_RINGING

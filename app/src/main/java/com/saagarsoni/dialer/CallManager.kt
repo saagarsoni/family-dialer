@@ -35,6 +35,8 @@ object CallManager {
         var best: Tracked? = null
         var bestScore = -1
         for (t in calls) {
+            val par = t.call.parent
+            if (par != null && calls.any { it.call === par }) continue
             val s = when (t.call.state) {
                 Call.STATE_RINGING -> 5
                 Call.STATE_ACTIVE -> 4
@@ -54,7 +56,9 @@ object CallManager {
     }
 
     fun otherHolding(t: Tracked): Tracked? =
-        calls.firstOrNull { it !== t && it.call.state == Call.STATE_HOLDING }
+        calls.firstOrNull { it !== t && it.call.parent == null && it.call.state == Call.STATE_HOLDING }
+
+    fun trackedFor(c: Call): Tracked? = calls.firstOrNull { it.call === c }
 
     fun takeEnded(): Ended? {
         val e = lastEnded
@@ -90,6 +94,14 @@ object CallManager {
             }
 
             override fun onDetailsChanged(c: Call, details: Call.Details) {
+                changed()
+            }
+
+            override fun onChildrenChanged(c: Call, children: MutableList<Call>) {
+                changed()
+            }
+
+            override fun onParentChanged(c: Call, parent: Call?) {
                 changed()
             }
         }
