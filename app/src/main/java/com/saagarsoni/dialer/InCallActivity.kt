@@ -164,7 +164,11 @@ class InCallActivity : Activity() {
         root.orientation = LinearLayout.VERTICAL
         root.gravity = Gravity.CENTER_HORIZONTAL
         root.setBackgroundColor(CALL_BG)
-        root.setPadding(dp(24), dp(20), dp(24), dp(20))
+        root.setPadding(dp(24), dp(20), dp(24), dp(8))
+
+        val bottom = LinearLayout(this)
+        bottom.orientation = LinearLayout.VERTICAL
+        bottom.setPadding(dp(24), dp(4), dp(24), dp(20))
 
         stateView = TextView(this)
         stateView.textSize = 15f
@@ -340,7 +344,7 @@ class InCallActivity : Activity() {
         incomingRow.addView(answer, LinearLayout.LayoutParams(0, WRAP, 1f))
         val ilp = LinearLayout.LayoutParams(MATCH, WRAP)
         ilp.topMargin = dp(8)
-        root.addView(incomingRow, ilp)
+        bottom.addView(incomingRow, ilp)
 
         // end call
         endBtn = TextView(this)
@@ -357,13 +361,18 @@ class InCallActivity : Activity() {
         val elp = LinearLayout.LayoutParams(dp(220), dp(60))
         elp.gravity = Gravity.CENTER_HORIZONTAL
         elp.topMargin = dp(14)
-        root.addView(endBtn, elp)
+        bottom.addView(endBtn, elp)
 
         val sv = android.widget.ScrollView(this)
         sv.isFillViewport = true
         sv.setBackgroundColor(CALL_BG)
         sv.addView(root, android.view.ViewGroup.LayoutParams(MATCH, MATCH))
-        setContentView(sv)
+        val outer = LinearLayout(this)
+        outer.orientation = LinearLayout.VERTICAL
+        outer.setBackgroundColor(CALL_BG)
+        outer.addView(sv, LinearLayout.LayoutParams(MATCH, 0, 1f))
+        outer.addView(bottom, LinearLayout.LayoutParams(MATCH, WRAP))
+        setContentView(outer)
     }
 
     private fun fillParticipants(conf: Call) {

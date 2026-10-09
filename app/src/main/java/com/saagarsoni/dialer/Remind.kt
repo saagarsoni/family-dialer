@@ -65,7 +65,7 @@ object Remind {
 
         val title = if (r.name.isNotEmpty()) r.name else r.number
         val b = Notification.Builder(ctx, CHANNEL)
-            .setSmallIcon(android.R.drawable.sym_action_call)
+            .setSmallIcon(R.drawable.ic_call)
             .setContentTitle("Callback: $title")
             .setContentText(r.msg)
             .setContentIntent(openPi)

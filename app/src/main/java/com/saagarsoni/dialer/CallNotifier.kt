@@ -69,7 +69,7 @@ object CallNotifier {
         val b: Notification.Builder
         if (state == Call.STATE_RINGING) {
             b = Notification.Builder(ctx, CH_RING)
-                .setSmallIcon(android.R.drawable.sym_action_call)
+                .setSmallIcon(R.drawable.ic_call)
                 .setContentTitle("Incoming call")
                 .setContentText(title)
                 .setCategory(Notification.CATEGORY_CALL)
@@ -85,7 +85,7 @@ object CallNotifier {
                 else -> "Calling..."
             }
             b = Notification.Builder(ctx, CH_ONGOING)
-                .setSmallIcon(android.R.drawable.sym_action_call)
+                .setSmallIcon(R.drawable.ic_call)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setCategory(Notification.CATEGORY_CALL)
