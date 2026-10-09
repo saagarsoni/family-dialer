@@ -20,6 +20,7 @@ jobs:
                 *.kt) d="app/src/main/java/com/saagarsoni/dialer" ;;
                 AndroidManifest.xml) d="app/src/main" ;;
                 build.gradle) d="app" ;;
+                ic_call.xml) d="app/src/main/res/drawable" ;;
                 *) echo "Skip unknown file: $n"; continue ;;
               esac
               mkdir -p "$d"
